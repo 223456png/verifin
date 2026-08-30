@@ -486,6 +486,7 @@ class EvidenceExtractor:
         "the", "of", "in", "to", "from", "and", "a", "an", "was", "is", "are",
         "what", "how", "much", "did", "do", "for", "by", "with", "at", "on",
         "its", "their", "than", "then", "that", "this", "per", "as", "be",
+        "were", "due", "related",
     }
 
     @classmethod
@@ -495,6 +496,92 @@ class EvidenceExtractor:
             token for token in re.findall(r"[a-z]+", (text or "").lower())
             if token not in cls._QUERY_STOPWORDS
         }
+
+    @classmethod
+    def collect_phrase_values(
+        cls, content: str, phrase: str, year: Optional[str] = None,
+        max_n: int = 6,
+    ) -> List[dict]:
+        """短语锚定表格数值候选（Phase 10 比率计算流）。
+
+        "what percentage of X are Y" 类比率题常无年份、指标词典也不覆盖
+        （"leased facilities" / "total purchase price"），操作数取
+        「行标签 × 短语实词重叠」锚定的表格数值：
+
+        - **水平表**：``year`` 给定且表头列含该年份 → 仅取该列；否则取
+          每行全部数值列（各列均成候选，含 total 列，组合枚举择优）；
+        - **垂直表**：``year`` 给定 → 行标签含该年份的行；否则全部行，
+          取行内数值单元格；
+        - anchor_score = ``1 - 双向词重叠率``（行标签与短语实词的双向
+          覆盖率取大，越大越可信）；返回值带 ``row_label`` / ``column``
+          （LLM program 生成的候选上下文也复用本字段）。
+        """
+        phrase_tokens = cls._content_tokens(phrase or "")
+        if not phrase_tokens:
+            return []
+        out: List[dict] = []
+        for table in parse_tables(content):
+            column_years = _table_column_years(table)
+            header_row = table.headers[-1] if table.headers else []
+            cols = (
+                [col for col, yr in column_years.items() if str(yr) == str(year)]
+                if year else []
+            )
+            for row_index, cells in enumerate(table.rows):
+                if not cells or not cells[0].strip():
+                    continue
+                label = cells[0].strip()
+                label_tokens = cls._content_tokens(label)
+                if not label_tokens:
+                    continue
+                shared = label_tokens & phrase_tokens
+                overlap = max(
+                    len(shared) / len(label_tokens),
+                    len(shared) / len(phrase_tokens),
+                )
+                # 单 token 命中多为泛化词（"total"/"current"）假阳性 → 加惩罚
+                anchor = 1.0 - overlap + (0.25 if len(shared) < 2 else 0.0)
+
+                def _append(value: float, unit: Optional[str], column: str) -> None:
+                    out.append({
+                        "value": value,
+                        "unit": unit,
+                        "period": str(year or ""),
+                        "row_label": label,
+                        "column": column,
+                        "anchor_score": round(anchor, 3),
+                    })
+
+                # 水平表：年份列对齐（有年份列时）或全数值列
+                if cols:
+                    for col in cols:
+                        parsed = _parse_cell_value(table.cell(row_index, col))
+                        if parsed is not None:
+                            _append(
+                                parsed[0], parsed[1],
+                                header_row[col].strip() if col < len(header_row) else "",
+                            )
+                else:
+                    # 垂直表行标签自带年份：year 给定时须命中
+                    if year and not (_YEAR_VALUE_RE.search(label) and str(year) in label):
+                        continue
+                    for col in range(1, len(cells)):
+                        parsed = _parse_cell_value(cells[col])
+                        if parsed is not None:
+                            _append(
+                                parsed[0], parsed[1],
+                                header_row[col].strip() if col < len(header_row) else "",
+                            )
+        out.sort(key=lambda item: item["anchor_score"])
+        # 同表同值去重（多级表头承接产生的重复）
+        seen, deduped = set(), []
+        for item in out:
+            key = (item["row_label"], item["value"], item["column"])
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(item)
+        return deduped[:max_n]
 
     @classmethod
     def collect_year_values(

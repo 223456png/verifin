@@ -158,12 +158,15 @@ def generate_pseudo_gold(query: str) -> List[str]:
     - 所有样本：retrieve + verify（证据必须过校验）；
     - 增长/百分比/变化类多跳问题：额外要求 calc（计算结果而非直接引用）；
     - 跨实体比较类（Phase 9.7："higher/lower ... than" / "difference
-      between"）：同为算术推导（subtract），要求 calc。
+      between"）：同为算术推导（subtract），要求 calc；
+    - 比率类（Phase 10："what portion/fraction of X are Y"，percentage 已
+      在增长关键词内）：divide 推导，要求 calc。
     """
     required = ["retrieve", "verify"]
     lowered = (query or "").lower()
     calc_triggers = _GROWTH_KEYWORDS + (
         "higher than", "lower than", "difference between",
+        "portion", "fraction", "percent of",
     )
     if any(keyword in lowered for keyword in calc_triggers):
         required.append("calc")

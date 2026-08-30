@@ -139,6 +139,9 @@ def _detect_calculation(query: str) -> Optional[dict]:
         "entity_b": spec.entity_b,
         "entities": list(spec.entities),
         "second_metric": spec.second_metric,
+        # Phase 10 ratio 模板透传（分子/分母短语）
+        "numerator": spec.numerator,
+        "denominator": spec.denominator,
     }
 
 
@@ -210,9 +213,11 @@ def planner_node(state: Any) -> dict:
         second_task = build_retrieval_query(second_claim, dialog)
         sub_tasks.append(second_task)
         claims[second_task] = dict(second_claim)
-    elif calc_spec is not None:
-        # 计算流：基期/比较期各一个携带四要素的检索子任务；
+    elif calc_spec is not None and calc_spec.get("kind") != "ratio":
+        # 计算流（年份键控）：基期/比较期各一个携带四要素的检索子任务；
         # 实体/指标缺失时（真实数据全小写问题）原问题先入队兜底检索
+        # （Phase 10 ratio 走默认单检索路径——双操作数几乎总在同表，
+        # 由 calculator 按分子/分母短语锚定取数）
         base_claim = {**claim, "period": calc_spec["base_period"]}
         target_claim = {**claim, "period": calc_spec["target_period"]}
         sub_tasks = [
@@ -256,12 +261,17 @@ def planner_node(state: Any) -> dict:
     )
 
 
-def make_planner_node(llm_planner=None):
-    """构造 planner 节点工厂：注入 LLM 规划器（可降级）。
+def make_planner_node(llm_planner=None, llm_programmer=None):
+    """构造 planner 节点工厂：注入 LLM 规划器 / LLM 程序生成器（可降级）。
 
     ``llm_planner`` 需提供 ``available`` 属性与 ``plan(query, history) -> Optional[dict]``
     方法（见 :class:`verifin.core.llm_planner.LLMPlanner`）；None 或不可用时节点行为
     与确定性规则 planner 完全一致。
+
+    ``llm_programmer``（Phase 10）需提供 ``available`` 属性（见
+    :class:`verifin.tools.llm_programmer.LLMProgramGenerator`）；注入且可用时，
+    确定性模板未检出的数值问题置 ``calculation_spec={"kind": "llm_program"}``
+    （calculator 走 LLM 程序生成路径，失败自动降级诊断）。
 
     合并策略（LLM 可用且输出合法时）：
     - ``sub_tasks``：采用 LLM 的分解结果；
@@ -269,8 +279,19 @@ def make_planner_node(llm_planner=None):
     - ``calculation_spec``：规则 detect_program 优先，LLM 仅补充规则未检测到的计算。
     """
     def _node(state: Any) -> dict:
+        use_llm_program = (
+            llm_programmer is not None
+            and getattr(llm_programmer, "available", False)
+        )
         if llm_planner is None or not getattr(llm_planner, "available", False):
-            return planner_node(state)
+            if not use_llm_program:
+                return planner_node(state)
+            # Phase 10：无 LLM planner 但有 programmer → 模板未检出时走 LLM 程序
+            result = planner_node(state)
+            if not result.get("calculation_spec"):
+                result["calculation_spec"] = {"kind": "llm_program"}
+                result["calculation_requested"] = True
+            return result
 
         # 先跑规则 planner（保证偏好注入/calc 检测/兜底齐全），再用 LLM 增强分解
         result = planner_node(state)
@@ -612,15 +633,190 @@ def _entity_keyed_candidates(s: dict, program_spec) -> Dict[str, list]:
     return candidates
 
 
+def _ratio_candidates(s: dict, program_spec) -> Dict[str, list]:
+    """比率流候选收集（Phase 10："what percentage of X are Y"）。
+
+    返回 ``{"num": [ValueCandidate], "den": [ValueCandidate]}``——分子/分母
+    各自按短语锚定扫描（行标签 × 短语实词重叠）。短语无实词
+    （"due in 2018"）时回退年份锚定扫描（问题年份）。
+
+    收集顺序（桶内按 anchor_score 升序取优）：
+    1. 检索文档的短语锚定表格扫描（行标签词重叠锚定）；
+    2. small-to-big 父文档补全（+0.25 来源惩罚）。
+    """
+    from verifin.tools.evidence import EvidenceExtractor
+    from verifin.tools.program_executor import ValueCandidate
+
+    candidates: Dict[str, List[ValueCandidate]] = {"num": [], "den": []}
+    query_text = _latest_user_query(s)
+    year = program_spec.base_period or None
+
+    def _add(bucket: str, item: dict, chunk_id, penalty: float) -> None:
+        lst = candidates[bucket]
+        if any(c.value == item["value"] and c.unit == item["unit"] for c in lst):
+            return
+        lst.append(
+            ValueCandidate(
+                value=float(item["value"]),
+                unit=item.get("unit"),
+                period=str(item.get("period") or year or ""),
+                chunk_id=chunk_id,
+                anchor_score=penalty + float(item.get("anchor_score", 0.0)),
+            )
+        )
+
+    def _scan(content: str, chunk_id, penalty: float = 0.0) -> None:
+        for bucket, phrase in (
+            ("num", program_spec.numerator), ("den", program_spec.denominator),
+        ):
+            if not phrase:
+                continue
+            items = EvidenceExtractor.collect_phrase_values(
+                content, phrase, year
+            )
+            if not items:
+                # 短语无实词（"due in 2018"）→ 年份锚定兜底
+                if year:
+                    items = EvidenceExtractor.collect_year_values(content, year)
+            for item in items:
+                _add(bucket, item, chunk_id, penalty)
+
+    for doc in [d for d in (s.get("retrieved_docs") or []) if isinstance(d, dict)]:
+        _scan(str(doc.get("content") or ""), doc.get("chunk_id"))
+
+    # 父文档补全（small-to-big）：比率题双操作数几乎总在同表，
+    # 检索未直接命中数值 chunk 时按问题实词 × 文档重叠度补全
+    doc_chunks: Dict[str, str] = {}
+    for doc in [d for d in (s.get("retrieved_docs") or []) if isinstance(d, dict)]:
+        meta = doc.get("metadata") if isinstance(doc.get("metadata"), dict) else {}
+        doc_id = str(meta.get("doc_id") or "")
+        if doc_id:
+            doc_chunks[doc_id] = doc_chunks.get(doc_id, "") + " " + str(doc.get("content") or "")
+    query_tokens = EvidenceExtractor._content_tokens(query_text)
+    doc_ids = sorted(
+        doc_chunks,
+        key=lambda d: -len(EvidenceExtractor._content_tokens(doc_chunks[d]) & query_tokens),
+    )
+    for doc_id in doc_ids[:10]:
+        expanded = _call_tool("expand_document", doc_id=doc_id)
+        if not isinstance(expanded, list):
+            continue
+        for chunk in expanded:
+            if isinstance(chunk, dict):
+                _scan(
+                    str(chunk.get("content") or ""),
+                    chunk.get("chunk_id"),
+                    penalty=0.25,
+                )
+    return candidates
+
+
+def _llm_program_candidates(s: dict, limit: int = 12) -> List[dict]:
+    """LLM 程序生成的编号候选（Phase 10）：检索文档 + 父文档补全的表格数值。
+
+    返回 ``[{"id": "v1", "value": 8.1, "context": "row: ... | col: ...",
+    "chunk_id": ...}]``（单值 vN，按锚定分排序截断）；同一行标签的
+    多个数值聚合成 ``tN`` 值组候选（聚合算子参数）。
+    """
+    from verifin.tools.evidence import EvidenceExtractor
+
+    query_text = _latest_user_query(s)
+    import re as _re
+
+    years = list(dict.fromkeys(_re.findall(r"\b(?:19|20)\d{2}\b", query_text)))[:2]
+
+    singles: List[dict] = []
+    groups: List[dict] = []
+    seen_values = set()
+    seen_groups = set()
+
+    def _scan(content: str, chunk_id, penalty: float = 0.0) -> None:
+        for year in years:
+            for item in EvidenceExtractor.collect_table_year_values(
+                content, year, query=query_text
+            ):
+                key = (item.get("row_label"), item["value"])
+                if key in seen_values:
+                    continue
+                seen_values.add(key)
+                singles.append({
+                    **item, "chunk_id": chunk_id,
+                    "anchor_score": penalty + item.get("anchor_score", 0.0),
+                })
+        # 无年份 / 聚合：短语锚定取行组
+        rows: Dict[str, List[float]] = {}
+        for item in EvidenceExtractor.collect_phrase_values(
+            content, query_text, max_n=12
+        ):
+            label = str(item.get("row_label") or "")
+            if label and label not in seen_groups:
+                rows.setdefault(label, []).append(item["value"])
+        for label, values in rows.items():
+            if len(values) < 2:
+                continue  # 单值行已在 singles 覆盖
+            seen_groups.add(label)
+            groups.append({
+                "label": label, "values": values, "chunk_id": chunk_id,
+            })
+
+    for doc in [d for d in (s.get("retrieved_docs") or []) if isinstance(d, dict)]:
+        _scan(str(doc.get("content") or ""), doc.get("chunk_id"))
+
+    doc_chunks: Dict[str, str] = {}
+    for doc in [d for d in (s.get("retrieved_docs") or []) if isinstance(d, dict)]:
+        meta = doc.get("metadata") if isinstance(doc.get("metadata"), dict) else {}
+        doc_id = str(meta.get("doc_id") or "")
+        if doc_id:
+            doc_chunks[doc_id] = doc_chunks.get(doc_id, "") + " " + str(doc.get("content") or "")
+    query_tokens = EvidenceExtractor._content_tokens(query_text)
+    doc_ids = sorted(
+        doc_chunks,
+        key=lambda d: -len(EvidenceExtractor._content_tokens(doc_chunks[d]) & query_tokens),
+    )
+    for doc_id in doc_ids[:5]:
+        expanded = _call_tool("expand_document", doc_id=doc_id)
+        if not isinstance(expanded, list):
+            continue
+        for chunk in expanded:
+            if isinstance(chunk, dict):
+                _scan(
+                    str(chunk.get("content") or ""),
+                    chunk.get("chunk_id"),
+                    penalty=0.25,
+                )
+
+    singles.sort(key=lambda item: item.get("anchor_score", 0.0))
+    out: List[dict] = []
+    for index, item in enumerate(singles[:limit], start=1):
+        context = f"row: {item.get('row_label') or '?'}"
+        if item.get("column"):
+            context += f" | col: {item['column']}"
+        out.append({
+            "id": f"v{index}",
+            "value": item["value"],
+            "context": context,
+            "chunk_id": item.get("chunk_id"),
+        })
+    for index, group in enumerate(groups[:4], start=1):
+        out.append({
+            "id": f"t{index}",
+            "value": group["values"],
+            "context": f"row group: {group['label']}",
+            "chunk_id": group.get("chunk_id"),
+        })
+    return out
+
+
 def calculator_node(state: Any) -> dict:
     """数值计算节点（Phase 8 接入主循环，Phase 9 升级为程序执行器）。
 
-    流程（Phase 9 / 9.7）：
+    流程（Phase 9 / 9.7 / 10）：
     1. **候选收集**：
        - 年份键控（growth_pct / difference）：四要素校验通过的证据值
          （高置信，``anchor_score=0``）+ 检索文档的年份锚定多候选扫描；
        - 实体键控（cross_entity_diff / argmax_relay）：校验证据 +
          实体锚定扫描（实体提及 + 指标同义词 + 年份三信号最近邻）；
+       - 短语键控（ratio，Phase 10）：分子/分母短语锚定的表格扫描；
     2. **程序执行**：:class:`ProgramExecutor` 枚举组合（≤16），单位归一
        （million/% 不跨量纲）+ 合理性剪枝，经 ``calc_expression``（PoT
        安全求值，走 ToolRegistry 保留 calc 工具族调用轨迹）得出 primary
@@ -628,6 +824,26 @@ def calculator_node(state: Any) -> dict:
        percentage，对齐 FinQA 裸数值 GT）；
     3. 降级：无可用组合 → calculation_result 记 error，synthesizer 输出诊断。
     """
+    return _calculator_impl(state, llm_programmer=None)
+
+
+def make_calculator_node(llm_programmer=None):
+    """构造 calculator 节点工厂：注入 LLM 程序生成器（Phase 10，可降级）。
+
+    ``llm_programmer`` 需提供 ``available`` 属性与
+    ``generate(query, candidates) -> Optional[dict]`` 方法（见
+    :class:`verifin.tools.llm_programmer.LLMProgramGenerator`）。注入且可用时：
+    确定性模板路径先行，失败（无 spec / 执行 error）→ LLM 生成 FinQA DSL
+    程序（编号候选值上下文）→ :func:`execute_dsl` 多步求值；LLM 不可用 /
+    输出非法时行为与 Phase 9 完全一致。
+    """
+    def _node(state: Any) -> dict:
+        return _calculator_impl(state, llm_programmer=llm_programmer)
+
+    return _node
+
+
+def _calculator_impl(state: Any, llm_programmer=None) -> dict:
     from verifin.tools.evidence import EvidenceExtractor
     from verifin.tools.program_executor import (
         ProgramExecutor,
@@ -649,6 +865,8 @@ def calculator_node(state: Any) -> dict:
         entity_b=spec.get("entity_b"),
         entities=list(spec.get("entities") or []),
         second_metric=spec.get("second_metric"),
+        numerator=spec.get("numerator"),
+        denominator=spec.get("denominator"),
     )
 
     def _registry_evaluator(expression: str) -> dict:
@@ -666,12 +884,20 @@ def calculator_node(state: Any) -> dict:
         program = ProgramExecutor(evaluator=_registry_evaluator).execute(
             program_spec, candidates
         )
-        return _hook(
-            s, "calculator", None,
-            hook_extra={"expression": program.expression} if program.expression else None,
-            calculation_result=program.to_dict(),
-            next_step="synthesizer",
+        return _finish_calculation(s, program, llm_programmer, _registry_evaluator)
+
+    # Phase 10：比率模板（"what percentage of X are Y"）走短语键控候选路径
+    if program_spec.kind == "ratio":
+        candidates = _ratio_candidates(s, program_spec)
+        program = ProgramExecutor(evaluator=_registry_evaluator).execute(
+            program_spec, candidates
         )
+        return _finish_calculation(s, program, llm_programmer, _registry_evaluator)
+
+    # Phase 10：LLM 程序生成路径（无确定性模板可检测时；llm_programmer
+    # 未注入 / 不可用时直接走模板降级诊断，行为与 Phase 9 一致）
+    if program_spec.kind == "llm_program":
+        return _run_llm_program(s, llm_programmer, _registry_evaluator)
 
     # 1a. 校验通过证据 → 候选（指标匹配的 flag 优先）
     candidates: Dict[str, List[ValueCandidate]] = {}
@@ -810,13 +1036,76 @@ def calculator_node(state: Any) -> dict:
     program = ProgramExecutor(evaluator=_registry_evaluator).execute(
         program_spec, candidates
     )
-    result = program.to_dict()
+    return _finish_calculation(s, program, llm_programmer, _registry_evaluator)
+
+
+def _run_llm_program(s: dict, llm_programmer, evaluator) -> dict:
+    """Phase 10 LLM 程序生成路径：编号候选 → LLM 生成 DSL → execute_dsl。
+
+    任何环节失败（programmer 未注入 / 候选为空 / LLM 输出非法 / 求值
+    出错）→ calculation_result 记 error，synthesizer 输出诊断（与模板
+    降级口径一致）。
+    """
+    from verifin.tools.program_executor import execute_dsl
+
+    query_text = _latest_user_query(s)
+
+    def _fail(error: str) -> dict:
+        return _hook(
+            s, "calculator", None,
+            calculation_result={"kind": "llm_program", "error": error},
+            next_step="synthesizer",
+        )
+
+    if llm_programmer is None or not getattr(llm_programmer, "available", False):
+        return _fail("llm programmer unavailable; no deterministic template matched")
+    candidates = _llm_program_candidates(s)
+    if not candidates:
+        return _fail("no numeric candidates collected from retrieved documents")
+    generated = llm_programmer.generate(query_text, candidates)
+    if not generated:
+        return _fail("llm program generation failed validation; falling back")
+    out = execute_dsl(generated["program"], generated["bindings"], evaluator=evaluator)
+    if out.get("error") or out.get("value") is None:
+        return _fail(f"dsl execution failed: {out.get('error')}")
+    # 证据 chunk：程序实际引用的候选（vN / tN）来源
+    import re as _re
+
+    referenced_ids = set(_re.findall(r"\b[vt]\d+\b", generated["program"]))
+    referenced = [c for c in candidates if c["id"] in referenced_ids]
+    if not referenced:
+        referenced = candidates[:2]
+    result = {
+        "kind": "llm_program",
+        "program": generated["program"],
+        "expression": out.get("expression"),
+        "value": out.get("value"),
+        "unit": None,
+        "steps": out.get("steps"),
+        "evidence": [c.get("chunk_id") for c in referenced if c.get("chunk_id")],
+    }
     return _hook(
         s, "calculator", None,
-        hook_extra={"expression": program.expression} if program.expression else None,
+        hook_extra={"expression": result["expression"]},
         calculation_result=result,
         next_step="synthesizer",
     )
+
+
+def _finish_calculation(s: dict, program, llm_programmer, evaluator) -> dict:
+    """模板执行收尾：成功直接返回；失败且 LLM programmer 可用 → LLM 兜底。"""
+    result = program.to_dict()
+    if not result.get("error") or llm_programmer is None or not getattr(
+        llm_programmer, "available", False
+    ):
+        return _hook(
+            s, "calculator", None,
+            hook_extra={"expression": program.expression} if program.expression else None,
+            calculation_result=result,
+            next_step="synthesizer",
+        )
+    # Phase 10：确定性模板失败 → LLM 程序生成兜底（可降级）
+    return _run_llm_program(s, llm_programmer, evaluator)
 
 
 def replanner_node(state: Any) -> dict:

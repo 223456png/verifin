@@ -31,7 +31,8 @@ VeriFin 的答案：**以证据校验为中心的 Agent 循环** —— 检索 �
 - **混合检索 + 多查询合并**：BM25 + Dense 双路召回（可插拔 embedding：离线 hash / 语义 bge-small），多子任务检索结果按 chunk_id 去重合并（保留原始问题的强词法信号）；small-to-big 父文档补全，解决表格数值块 BM25 信号弱的问题
 - **四要素校验器**：实体词边界匹配、期间年份交集、指标词典同义词归一、口径 token 重叠率——全部规则化、零 LLM 依赖、确定性可测
 - **冲突仲裁与重规划**：≤2% 数值差异融合均值，>5% 强制 Replan；来源信任度加权（年报申报 > 新闻稿 > 研报）；Replan 按失败原因（缺年份 / 缺指标 / 缺实体）重构查询
-- **PoT 安全计算器 + 程序模板执行器**：`calc_expression` AST 白名单沙箱求值（禁任意代码 / 禁 IO）；FinQA 推导型问题（占 93%）经模板检测 → 候选数值枚举 → 单位归一 → 锚分剪枝 → 确定性求值；四类模板——年份键控（growth_pct / difference）与实体键控（cross_entity_diff 跨实体差值 / argmax_relay 三实体比较接力），后者经实体锚定扫描（实体提及 + 指标同义词 + 年份三信号最近邻）取证，跨文档证据链不施加同 chunk 偏好
+- **PoT 安全计算器 + 程序模板执行器**：`calc_expression` AST 白名单沙箱求值（禁任意代码 / 禁 IO）；FinQA 推导型问题（占 93%）经模板检测 → 候选数值枚举 → 单位归一 → 锚分剪枝 → 确定性求值；五类模板——年份键控（growth_pct / difference）、实体键控（cross_entity_diff 跨实体差值 / argmax_relay 三实体比较接力，实体锚定扫描取证）与短语键控（**ratio**："what percentage of X are Y" 比率题，行标签 × 问题短语双向词重叠锚定分子/分母）
+- **FinQA DSL 多步执行器 + 可插拔 LLM 程序生成（可降级）**：模板外的多步算术（table_sum / table_average / `#N` 步骤引用链）由 `LLMProgramGenerator` 经 `complete(prompt)->str` 注入任意 LLM 生成 DSL 程序，编号候选（`vN` 单值 / `tN` 值组）供其消歧；输出先过结构校验（算子白名单 / 引用越界 / 幻觉候选拒绝）再逐步 PoT 求值——LLM 不可用 / 异常 / 输出非法时自动降级回确定性模板路径（默认行为与无 LLM 基线完全一致）
 - **会话偏好记忆**：多轮对话中抽取实体/期间/指标/来源偏好并作用于后续检索与仲裁（ConvFinQA 多轮继承）
 - **可插拔 LLM 规划层（可降级）**：`LLMPlanner` 经 `complete(prompt)->str` 注入任意 LLM provider（OpenAI / Anthropic / 本地模型），把金融问题分解为检索子任务 + 四要素 + 计算规格；LLM 不可用 / 异常 / 输出非法时自动降级到确定性规则 planner（零外部依赖兜底，测试与 demo 开箱即用）
 - **多跳 QA 合成管线**：从带来源标识的原子 chunk 抽取种子事实 → 跨文档配对（增长链 / 跨实体差值 / 三实体接力）→ 按推理深度合并 → **四重校验**（语义 / 推理 / 来源跨度 / 反伪多跳），确定性合成 2-hop/3-hop 评测基准——反伪多跳用数值级比较（年份 "2023" 不误含 "20"），实测拒掉与单文档现成数值重合的差值题
@@ -120,13 +121,14 @@ VeriFin 的答案：**以证据校验为中心的 Agent 循环** —— 检索 �
 
 ### 真实 FinQA test（100 样本抽样）
 
-| 指标 | Phase 8 | Phase 9 | 提升 |
-|---|---|---|---|
-| 答案 EM | 1.0% | **6.0%** | **6×** |
-| 模板可检测子集 EM | — | **24.0%** | — |
-| 文档级召回 recall@20 | 48% | **56%** | +8 pp |
+| 指标 | Phase 8 | Phase 9 | Phase 10 | 提升 |
+|---|---|---|---|---|
+| 答案 EM | 1.0% | 6.0% | **7.0%** | **7×** |
+| 模板可检测子集 EM | — | 24.0% | 18.4% | — |
+| PoT 计算子集规模 | — | 25 题 | **38 题** | +13（ratio 模板） |
+| 文档级召回 recall@20 | 48% | **56%** | 56% | +8 pp |
 
-**答案类型分解**（诚实口径）：提取型 4% / 推导型 93%（需 program 算术）/ 布尔型 3%。规则模板覆盖 growth_pct / difference 两类（检测子集 25%），table_sum / exp_avg / 多步 add 链属 LLM program 生成范畴（见 Roadmap）。
+**答案类型分解**（诚实口径）：提取型 4% / 推导型 93%（需 program 算术）/ 布尔型 3%。确定性模板覆盖 growth_pct / difference / cross_entity_diff / argmax_relay / **ratio**（"what percentage of X are Y"，FinQA test 占 ~17%）五类。Phase 10 ratio 模板在 100 样本上检出执行 13 题（此前 0）、新增 1 题正确（无样本由对转错）；未正确的主因是操作数锚定误差（短语命中的表格行与金标操作数不一致）。LLM 程序生成路径（table_sum / exp_avg / 多步算术链）基础设施就绪（DSL 执行器 + 校验 + 降级），未接真实 provider 全量评测（无 API key 不虚报数字），见 Roadmap。
 
 ### 真实 ConvFinQA dev 多轮（100 轮）
 
@@ -136,11 +138,15 @@ VeriFin 的答案：**以证据校验为中心的 Agent 循环** —— 检索 �
 
 ### Agent 行为指标
 
-| 指标 | 实测 | 目标 |
-|---|---|---|
-| 工具调用精准率 Tool F1 | **95.6%** | ≥ 85% ✓ |
-| 重规划有效率 | 45.7% | ≥ 60% |
-| 平均轨迹步数 | 7.65 | ≤ 4 |
+| 指标 | Phase 9 | Phase 10 | 目标 |
+|---|---|---|---|
+| 工具调用精准率 Tool F1 | 95.6% | **94.8%** | ≥ 85% ✓ |
+| 重规划有效率 | 45.7% | **50.0%** | ≥ 60% |
+| 平均轨迹步数 | 7.65 | **7.57** | ≤ 4 |
+
+> Phase 10 Tool F1 微降为**口径变化**而非行为退化：pseudo-gold calc 触发词
+> 补齐比率类（portion/fraction/percent of）后，更多样本被要求 calc 工具族
+> （比率题此前静默落入提取路径，现经 ratio 模板真正进入 calculator）。
 
 ### 检索升级（单查询直接检索口径，100 样本）
 
@@ -153,7 +159,7 @@ VeriFin 的答案：**以证据校验为中心的 Agent 循环** —— 检索 �
 > 语义 embedding（bge-small-en-v1.5）替换无语义哈希向量带来明确提升；通用
 > cross-encoder rerank 在此口径无益，属诚实边界。复现：`scripts/compare_retrieval.py`。
 
-完整报告见 `results/finqa_v8/report.md`、`results/convfinqa_check/report.md`、`results/synth_check4/report.md`、`results/multihop_check/report.md`（含错误分析与诚实声明）。
+完整报告见 `results/finqa_v8/report.md`（Phase 9）、`results/finqa_v10/report.md`（Phase 10）、`results/convfinqa_check/report.md`、`results/synth_check4/report.md`、`results/multihop_check/report.md`（含错误分析与诚实声明）。
 
 ---
 
@@ -243,20 +249,21 @@ src/verifin/
 └── ui/               # Web Demo 静态页（轨迹可视化）
 ```
 
-**设计文档**（`docs/designs/`）：9 个 Phase 的迭代设计记录，每个 Phase 含问题定义、方案、验收标准——完整呈现从 ingestion 到 FinQA 集成的演进路径。
+**设计文档**（`docs/designs/`）：10 个 Phase 的迭代设计记录，每个 Phase 含问题定义、方案、验收标准——完整呈现从 ingestion 到 LLM 程序生成的演进路径。
 
 ---
 
 ## Roadmap
 
-- [ ] **Phase 10**：LLM program 生成（table_sum / exp_avg / 多步 add 链），覆盖 FinQA 剩余 ~75% 推导型问题
+- [x] **Phase 10**：ratio 比率模板（短语锚定，FinQA test 占 ~17% 的题型，EM 6.0% → 7.0%）+ FinQA DSL 多步执行器（`#N` 引用 / table_sum / table_average）+ 可插拔 LLM 程序生成器（结构校验 + 失败降级，mock provider 单测锁定语义）
+- [ ] LLM program 生成接入真实 provider 全量评测（基础设施就绪，无 API key 不虚报数字）；覆盖 FinQA 剩余 ~70% 推导型问题
 - [x] 真实语义 embedding（bge-small-en-v1.5）替换 hash-Dense（doc recall +5 pp）
 - [x] 可插拔 LLM 规划层（任意 provider，失败降级规则 planner，零外部依赖兜底）
 - [x] 多跳 QA 合成管线（种子抽取 + 四重校验，16 条基准 + 能力边界实证）
 - [x] 实体键控程序模板（cross_entity_diff / argmax_relay），多跳基准 EM 37.5% → 100%
 - [ ] 金融域专用 rerank（通用 ms-marco 对数值表格无益，需财务语料微调）
 - [ ] TAT-QA 数据集评测（跨表推理）
-- [ ] 重规划策略优化（多跳基准首答全对暂无触发；真实 FinQA 上有效率 46% → 目标 60%+）
+- [ ] 重规划策略优化（多跳基准首答全对暂无触发；真实 FinQA 上有效率 50% → 目标 60%+）
 
 ---
 
