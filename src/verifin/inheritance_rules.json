@@ -1,0 +1,19 @@
+{
+  "fallback_metric": "profit",
+  "earn_patterns": [
+    "赚了多少钱", "赚了多少", "赚多少", "利润是多少",
+    "how much did .+ earn", "\\bearn(ed)?\\b", "\\bmade\\b", "net income of"
+  ],
+  "inheritance": [
+    {
+      "current": "earn",
+      "history_has": ["growth", "grew", "grow", "增长", "增速"],
+      "metric": "growth_rate"
+    },
+    {
+      "current": "earn",
+      "history_has": ["revenue", "sales", "营收"],
+      "metric": "profit"
+    }
+  ]
+}
