@@ -460,10 +460,16 @@ _DATASET_CLASSES = {
 
 
 def load_dataset(name: str, data_dir: PathLike, split: str = "test") -> Dataset:
-    """数据集工厂：``finqa`` / ``convfinqa`` / ``tatqa`` / ``synthetic``。"""
+    """数据集工厂：``finqa`` / ``convfinqa`` / ``tatqa`` / ``synthetic`` /
+    ``synthetic_multihop``（多跳合成基准，见 benchmark/multihop_synth.py）。"""
+    if name == "synthetic_multihop":
+        # 延迟导入：multihop_synth 依赖本模块的 synth_chunks（避免环）
+        from verifin.benchmark.multihop_synth import MultihopSynthDataset
+
+        return MultihopSynthDataset()  # type: ignore[return-value]
     if name not in _DATASET_CLASSES:
         raise ValueError(
-            f"Unknown dataset: {name}（可用: {', '.join(_DATASET_CLASSES)}）"
+            f"Unknown dataset: {name}（可用: {', '.join(_DATASET_CLASSES)}, synthetic_multihop）"
         )
     if name == "synthetic":
         return SyntheticDataset()

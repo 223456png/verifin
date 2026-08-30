@@ -156,11 +156,19 @@ def generate_pseudo_gold(query: str) -> List[str]:
     """规则生成 pseudo-gold 工具族标签。
 
     - 所有样本：retrieve + verify（证据必须过校验）；
-    - 增长/百分比/变化类多跳问题：额外要求 calc（计算结果而非直接引用）。
+    - 增长/百分比/变化类多跳问题：额外要求 calc（计算结果而非直接引用）；
+    - 跨实体比较类（Phase 9.7："higher/lower ... than" / "difference
+      between"）：同为算术推导（subtract），要求 calc。
     """
     required = ["retrieve", "verify"]
     lowered = (query or "").lower()
-    if any(keyword in lowered for keyword in _GROWTH_KEYWORDS):
+    calc_triggers = _GROWTH_KEYWORDS + (
+        "higher than", "lower than", "difference between",
+    )
+    if any(keyword in lowered for keyword in calc_triggers):
+        required.append("calc")
+    # 比较级与 than 分离的形态（"How much higher was A ... than B ..."）
+    elif ("higher" in lowered or "lower" in lowered) and "than" in lowered:
         required.append("calc")
     return required
 
@@ -245,6 +253,84 @@ def retrieval_recall(results: List[dict]) -> float:
     ) / len(results)
 
 
+# ---------------------------------------------------------------------------
+# RAGAs 风格生成质量指标（确定性规则近似，非 LLM 评测）
+# ---------------------------------------------------------------------------
+
+# answer_relevancy 的内容词过滤（疑问词/助词/泛指词不参与覆盖率）
+_RAGAS_STOPWORDS = frozenset({
+    "a", "an", "the", "is", "are", "was", "were", "be", "been", "do", "does",
+    "did", "what", "which", "who", "whom", "whose", "when", "where", "why",
+    "how", "in", "on", "at", "by", "for", "of", "to", "from", "with", "about",
+    "as", "than", "and", "or", "its", "their", "his", "her", "it", "this",
+    "that", "these", "those", "there", "here", "much", "many", "more", "most",
+    "less", "least", "also", "only", "just", "company", "companies", "please",
+    "tell", "per", "was",
+})
+
+
+def answer_relevancy(query: str, answer: str) -> float:
+    """答案相关性（RAGAs answer_relevancy 的规则近似）。
+
+    口径：问题内容词（字母词去停用词 + 数值 token）在答案中的覆盖率；
+    问题无内容词（纯停用词）时，有答案即 1.0。
+    """
+    if not (query or "").strip():
+        return 1.0 if (answer or "").strip() else 0.0
+    words = [
+        word for word in re.findall(r"[a-z]+", query.lower())
+        if word not in _RAGAS_STOPWORDS and len(word) > 2
+    ]
+    words += re.findall(r"\d[\d,.]*", query)
+    if not words:
+        return 1.0 if (answer or "").strip() else 0.0
+    answer_lower = (answer or "").lower()
+    hits = sum(1 for word in words if word in answer_lower)
+    return hits / len(words)
+
+
+def faithfulness(
+    answer: str,
+    evidence_texts: List[str],
+    calc_candidates: Optional[List[tuple]] = None,
+    tolerance: float = DEFAULT_TOLERANCE,
+) -> float:
+    """忠实度（RAGAs faithfulness 的规则近似）。
+
+    口径：答案中的**数值声明**被支持的比例——支持 = 数值出现在证据文本中
+    （单位归一 + 容差）或等于 PoT 计算产物（计算视为有据推导）。
+
+    - 证据池由调用方给定（benchmark 传入**通过四要素校验的 chunk 文本**，
+      使 faithfulness 与验证闭环绑定，而非任意检索结果）；
+    - 答案无数值声明 → 1.0（无可支持的声明即无违反）；空答案 → 0.0。
+    """
+    if not (answer or "").strip():
+        return 0.0
+    claims = list(_NUM_TOKEN_RE.finditer(answer))
+    if not claims:
+        return 1.0
+    text = "\n".join(evidence_texts or [])
+    supported = 0
+    for match in claims:
+        value = float(match.group(1).replace(",", ""))
+        unit_raw = (match.group(2) or "").lower()
+        unit = "%" if unit_raw == "%" else (unit_raw or None)
+        claim_text = f"{value:g} {unit}" if unit else f"{value:g}"
+        if answer_in_text(claim_text, text, tolerance) or exact_match(
+            calc_candidates or [], claim_text, tolerance
+        ):
+            supported += 1
+    return supported / len(claims)
+
+
+def _avg_field(results: List[dict], field: str) -> Optional[float]:
+    """逐样本字段均值（跳过 None；全 None 返回 None）。"""
+    values = [result.get(field) for result in results if result.get(field) is not None]
+    if not values:
+        return None
+    return sum(values) / len(values)
+
+
 def summarize_results(results: List[dict]) -> dict:
     """单配置结果 → 摘要指标（含错误归因计数 + Phase 8 答案类型分解）。"""
     errors: dict = {}
@@ -284,6 +370,8 @@ def summarize_results(results: List[dict]) -> dict:
         "replan_hits": replan_hits,
         "error_counts": errors,
         "multi_turn_accuracy": accuracy_multiturn(results),
+        "faithfulness": _avg_field(results, "faithfulness"),
+        "answer_relevancy": _avg_field(results, "answer_relevancy"),
         "type_accuracy": type_accuracy,
         "calc_subset": {
             "count": len(calc_rows),

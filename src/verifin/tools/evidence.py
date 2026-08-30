@@ -530,6 +530,81 @@ class EvidenceExtractor:
             for dist, value, unit in collected[:max_n]
         ]
 
+    # Phase 9.7：实体锚定扫描（跨实体比较 / argmax 接力计算流）
+    _ENTITY_ANCHOR_WINDOW = 160
+
+    @classmethod
+    def collect_entity_values(
+        cls, content: str, entity: str, year: Optional[str] = None,
+        spec_metric: Optional[str] = None, max_n: int = 4,
+    ) -> List[dict]:
+        """实体锚定数值候选（Phase 9.7 跨实体计算流）。
+
+        数值取「实体提及 + 指标同义词 + 年份」三信号最近邻的数字：
+
+        - 实体必须以词边界出现在 content 中（大小写不敏感），否则返回空
+          （该 chunk 不属于此实体）；
+        - ``spec_metric`` 给定 → 指标 span 限定为该 canonical 的提及，
+          chunk 未提及目标指标时返回空（防跨指标串值，如 gross margin
+          问题误收同实体的 revenue 数值）；
+        - ``year`` 给定 → 数值须落在该年份 ``_ENTITY_ANCHOR_WINDOW``
+          字符窗口内（chunk 无该年份提及 → 空）。
+
+        返回 ``[{"value", "unit", "period", "anchor_score"}]`` 按可信度
+        升序：anchor = 实体距离/100 +（指标未命中 +1.0）。
+        """
+        entity_spans = [
+            (match.start(), match.end())
+            for match in re.finditer(
+                r"\b" + re.escape(entity) + r"\b", content or "", re.IGNORECASE
+            )
+        ]
+        if not entity_spans:
+            return []
+
+        metric_spans = cls._metric_spans(content)
+        if spec_metric:
+            filtered = [s for s in metric_spans if s[2] == str(spec_metric).lower()]
+            if not filtered:
+                return []  # chunk 未提及目标指标 → 不产出候选（防跨指标串值）
+            metric_spans = filtered
+        year_spans = cls._year_spans(content)
+        if year:
+            year_spans = [s for s in year_spans if s[2] == str(year)]
+
+        def _distance(num_start: int, num_end: int, spans) -> Optional[int]:
+            best: Optional[int] = None
+            for start, end, *_ in spans:
+                if num_end <= start:
+                    dist = start - num_end
+                elif end <= num_start:
+                    dist = num_start - end
+                else:
+                    dist = 0
+                if best is None or dist < best:
+                    best = dist
+            return best
+
+        items: List[dict] = []
+        for num_start, num_end, value, unit in cls._number_spans(content):
+            entity_dist = _distance(num_start, num_end, entity_spans)
+            if entity_dist is None or entity_dist > cls._ENTITY_ANCHOR_WINDOW:
+                continue
+            metric_dist = _distance(num_start, num_end, metric_spans)
+            year_dist = _distance(num_start, num_end, year_spans)
+            if year and (year_dist is None or year_dist > cls._ENTITY_ANCHOR_WINDOW):
+                continue  # 数值不在目标年份的上下文窗口内
+            anchor = entity_dist / 100.0
+            anchor += 0.0 if metric_dist is not None else 1.0
+            items.append({
+                "value": value,
+                "unit": unit,
+                "period": str(year) if year else None,
+                "anchor_score": round(anchor, 3),
+            })
+        items.sort(key=lambda item: item["anchor_score"])
+        return items[:max_n]
+
     def extract(self, chunk: dict) -> Evidence:
         """规则抽取：Entity（内容 → doc_name 回退）/ Period / Metric / Value / Definition。
 

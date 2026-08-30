@@ -26,8 +26,8 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--dataset", default="finqa",
-        choices=["finqa", "convfinqa", "tatqa", "synthetic"],
-        help="评测数据集（真实数据缺失时自动降级内置合成语料）",
+        choices=["finqa", "convfinqa", "tatqa", "synthetic", "synthetic_multihop"],
+        help="评测数据集（synthetic_multihop 为多跳合成基准；真实数据缺失时自动降级内置合成语料）",
     )
     parser.add_argument("--data-dir", default="data", help="真实数据集目录")
     parser.add_argument("--split", default="test", help="数据集拆分（train/val/test）")
@@ -67,7 +67,8 @@ def main() -> int:
     args = parse_args()
     output_dir = Path(args.output)
     dataset = load_dataset(args.dataset, Path(args.data_dir), split=args.split)
-    if getattr(dataset, "is_synthetic", False) and args.dataset != "synthetic":
+    if getattr(dataset, "is_synthetic", False) and \
+            args.dataset not in ("synthetic", "synthetic_multihop"):
         print(f"提示: {args.dataset} 真实数据不可用（目录 {args.data_dir}），已降级内置合成语料（{len(dataset)} 个样本）")
     print(f"数据集 {dataset.name}: {len(dataset)} 个样本 → 评估 {args.max_samples or len(dataset)} 个")
 
