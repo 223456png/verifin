@@ -331,6 +331,94 @@ def test_execute_ratio_ordering() -> None:
     assert result.fraction == pytest.approx(1.0)
 
 
+# 17a. Phase 10.1：负值操作数剪枝（部分/整体非负）
+def test_execute_ratio_negative_prune() -> None:
+    spec = ProgramSpec(
+        kind="ratio", base_period="", target_period="",
+        numerator="deferred tax", denominator="purchase price",
+    )
+    result = ProgramExecutor().execute(spec, {
+        "num": [
+            ValueCandidate(value=-9500.0, unit=None, period="", chunk_id="c1"),
+            ValueCandidate(value=2400.0, unit=None, period="", chunk_id="c1"),
+        ],
+        "den": [ValueCandidate(value=73200.0, unit=None, period="", chunk_id="c1")],
+    })
+    # -9500/73200 被剪枝，唯一存活组合 2400/73200（fraction 保留 6 位小数）
+    assert result.fraction == pytest.approx(2400.0 / 73200.0, abs=1e-5)
+
+
+# 17b. Phase 10.1：分母 total 行偏好 + 分子 total 行惩罚
+def test_execute_ratio_total_row_preference() -> None:
+    spec = ProgramSpec(
+        kind="ratio", base_period="", target_period="",
+        numerator="due in 2018", denominator="future minimum rental payments",
+    )
+    # 分母短语与行标签零词重叠：total 行回退候选（anchor 0.75）
+    # 对普通行候选（anchor 0.25 但语义不符）——本例中只有 total 行
+    result = ProgramExecutor().execute(spec, {
+        "num": [
+            ValueCandidate(value=301.0, unit=None, period="", chunk_id="c1",
+                           row_label="2018"),
+        ],
+        "den": [
+            ValueCandidate(value=1160.0, unit=None, period="", chunk_id="c1",
+                           row_label="2021 - thereafter", anchor_score=0.5),
+            ValueCandidate(value=2575.0, unit=None, period="", chunk_id="c1",
+                           row_label="total", anchor_score=0.75),
+        ],
+    })
+    # total 行偏好（-0.35 → 0.40 < 0.5）：分母选 2575 而非 1160
+    assert result.fraction == pytest.approx(301.0 / 2575.0, abs=1e-5)
+    # 分子 total 行惩罚：分子若含 total 行候选则靠后
+    spec2 = ProgramSpec(
+        kind="ratio", base_period="", target_period="",
+        numerator="part", denominator="whole",
+    )
+    result2 = ProgramExecutor().execute(spec2, {
+        "num": [
+            ValueCandidate(value=8.0, unit=None, period="", chunk_id="c1",
+                           row_label="part", anchor_score=0.3),
+            ValueCandidate(value=100.0, unit=None, period="", chunk_id="c1",
+                           row_label="total part", anchor_score=0.3),
+        ],
+        "den": [ValueCandidate(value=100.0, unit=None, period="", chunk_id="c2",
+                               row_label="whole")],
+    })
+    # total 行分子 +0.2 惩罚 → part 行胜出（8/100 而非 100/100 自除）
+    assert result2.fraction == pytest.approx(0.08)
+
+
+# 17c. Phase 10.1：列一致性（分母短语含 "total" → total 列的 num/den 配对）
+def test_execute_ratio_column_preference() -> None:
+    spec = ProgramSpec(
+        kind="ratio", base_period="", target_period="",
+        numerator="leased",
+        denominator="total facilities as measured in square feet",
+    )
+    # 三列同锚分并列（unitedstates/othercountries/total 列）：
+    # 列头与分母短语词重叠的 total 列配对胜出
+    result = ProgramExecutor().execute(spec, {
+        "num": [
+            ValueCandidate(value=2.1, unit=None, period="", chunk_id="c1",
+                           row_label="leased facilities", column="unitedstates"),
+            ValueCandidate(value=6.0, unit=None, period="", chunk_id="c1",
+                           row_label="leased facilities", column="othercountries"),
+            ValueCandidate(value=8.1, unit=None, period="", chunk_id="c1",
+                           row_label="leased facilities", column="total"),
+        ],
+        "den": [
+            ValueCandidate(value=32.8, unit=None, period="", chunk_id="c1",
+                           row_label="total facilities", column="unitedstates"),
+            ValueCandidate(value=23.2, unit=None, period="", chunk_id="c1",
+                           row_label="total facilities", column="othercountries"),
+            ValueCandidate(value=56.0, unit=None, period="", chunk_id="c1",
+                           row_label="total facilities", column="total"),
+        ],
+    })
+    assert result.fraction == pytest.approx(8.1 / 56.0)
+
+
 # 18. 短语锚定表格扫描：行标签 × 短语实词重叠（无年份比率题的候选来源）
 def test_collect_phrase_values() -> None:
     content = (
@@ -345,11 +433,83 @@ def test_collect_phrase_values() -> None:
     assert leased[0]["anchor_score"] == 0.0  # 双向全覆盖命中
     total = EvidenceExtractor.collect_phrase_values(content, "total facilities")
     assert total and total[0]["value"] == pytest.approx(100.0)
-    # 无关短语：无行命中 → 全部候选均为低置信（anchor ≥ 1，无强锚定）
+    # 无关短语：零词重叠行不再成候选（Phase 10.1 严格匹配，
+    # 旧版零重叠行以 anchor 1.25 兜底会产生自除假阳性）
     unrelated = EvidenceExtractor.collect_phrase_values(content, "goodwill impairment")
-    assert unrelated and all(item["anchor_score"] >= 1.0 for item in unrelated)
+    assert unrelated == []
     # 空短语 → 空
     assert EvidenceExtractor.collect_phrase_values(content, "") == []
+
+
+# 18a. Phase 10.1：年份 token 匹配（"due in 2018" → 纯年份行标签）
+def test_collect_phrase_values_year_token() -> None:
+    content = (
+        "| $ in millions | as of december 2015 |\n"
+        "| 2016 | 317 |\n"
+        "| 2017 | 313 |\n"
+        "| 2018 | 301 |\n"
+        "| total | 2575 |\n"
+    )
+    due_2018 = EvidenceExtractor.collect_phrase_values(content, "due in 2018")
+    assert due_2018 and due_2018[0]["value"] == pytest.approx(301.0)
+    assert due_2018[0]["row_label"] == "2018"
+    # "after 2020" → 年份上界语义：命中 thereafter 行，不命中 ≤2020 的年份行
+    maturity = (
+        "| $ in millions | maturities |\n"
+        "| 2019 | 258 |\n"
+        "| 2020 | 226 |\n"
+        "| 2021 - thereafter | 1160 |\n"
+    )
+    after_2020 = EvidenceExtractor.collect_phrase_values(maturity, "due after 2020")
+    assert after_2020 and after_2020[0]["value"] == pytest.approx(1160.0)
+    assert after_2020[0]["row_label"] == "2021 - thereafter"
+    values = [item["value"] for item in after_2020]
+    assert 226.0 not in values  # 2020 行本身不命中
+    # 普通年份短语不触发上界语义
+    due_2019 = EvidenceExtractor.collect_phrase_values(maturity, "due in 2019")
+    assert due_2019 and due_2019[0]["value"] == pytest.approx(258.0)
+
+
+# 18b. Phase 10.1：正文句级扫描（分子在脚注正文而非表格）
+def test_collect_phrase_values_text_scan() -> None:
+    content = (
+        "( 1 ) 42749 shares were repurchased in open-market transactions "
+        "under the plan .\n"
+        "| period | shares |\n"
+        "| total: | 45686 |\n"
+    )
+    num = EvidenceExtractor.collect_phrase_values(
+        content, "repurchased in open-market transactions"
+    )
+    values = [item["value"] for item in num]
+    assert 42749.0 in values
+    assert 1.0 not in values  # 脚注标记 "( 1 )" 剥离，不污染候选
+    text_item = next(item for item in num if item["value"] == 42749.0)
+    assert text_item["source"] == "text"
+    # 表格行仍优先于正文（正文来源 +0.1 轻惩罚）
+    den = EvidenceExtractor.collect_phrase_values(content, "total number of shares")
+    assert den and den[0]["value"] == pytest.approx(45686.0)
+    assert den[0]["row_label"] == "total:"
+
+
+# 18c. Phase 10.1：total 行回退（"percentage of X" 的 X 与行标签零重叠时）
+def test_collect_total_values() -> None:
+    content = (
+        "| $ in millions | commitments |\n"
+        "| 2016 | 317 |\n"
+        "| 2018 | 301 |\n"
+        "| total | 2575 |\n"
+        "| other table header | x |\n"
+        "| grand total | 999 |\n"
+    )
+    totals = EvidenceExtractor.collect_total_values(content)
+    values = [item["value"] for item in totals]
+    assert 2575.0 in values
+    assert 999.0 in values  # "grand total" 尾缀形态也命中
+    assert all(item["anchor_score"] == 0.75 for item in totals)
+    assert all("total" in item["row_label"].lower() for item in totals)
+    # 非合计行不入回退
+    assert 317.0 not in values and 301.0 not in values
 
 
 # ---------------------------------------------------------------------------

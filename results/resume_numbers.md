@@ -1,7 +1,7 @@
 # VeriFin — 简历数字（Phase 10 收官，2026-08-30）
 
 > 本文件是从评测报告（results/synth_check4、results/finqa_v8、results/finqa_v10、
-> results/convfinqa_check、results/multihop_check）提炼的面试/简历可引用数字与
+> results/finqa_v10_1、results/convfinqa_check、results/multihop_check）提炼的面试/简历可引用数字与
 > 诚实边界说明。所有数字均可回溯到对应报告文件。
 
 ## 一句话定位
@@ -11,7 +11,7 @@ small-to-big 父文档补全）、四要素规则校验、冲突仲裁与重规�
 PoT 安全计算器 + 程序模板执行器（五类模板）+ FinQA DSL 多步执行器与可插拔
 LLM 程序生成（失败降级）；检索升级（语义 embedding 替换哈希向量）、可插拔
 LLM 规划层（失败降级规则 planner）、多跳 QA 合成管线（四重校验）与
-175 项测试全绿，完成真实 FinQA / ConvFinQA 评测并提供 FastAPI 服务层与 Web Demo。
+181 项测试全绿，完成真实 FinQA / ConvFinQA 评测并提供 FastAPI 服务层与 Web Demo。
 
 ## 可引用数字
 
@@ -37,9 +37,9 @@ LLM 规划层（失败降级规则 planner）、多跳 QA 合成管线（四重�
    证据 ≠ 算得出答案"的实证），新增实体键控程序模板后三类子集全对；
    Faithfulness 100%、Tool F1 100%。诚实边界：基准由本项目合成管线产出，
    问题形态与模板同源
-8. **测试资产**：175 项全绿（含程序执行器五模板 / DSL 多步执行器 / LLM 程序
+8. **测试资产**：181 项全绿（含程序执行器五模板 / DSL 多步执行器 / LLM 程序
    生成降级语义 / 表格解析 / 检索合并 / LLM 规划层 / 多跳合成四重校验 /
-   实体锚定与短语锚定扫描回归）
+   实体锚定与短语锚定扫描回归 / Phase 10.1 年份 token 与 thereafter 锚定）
 
 ## Phase 9 关键工程改动（面试可展开）
 
@@ -132,6 +132,18 @@ LLM 规划层（失败降级规则 planner）、多跳 QA 合成管线（四重�
 5. **pseudo-gold 口径修正**：calc 触发词补齐 portion/fraction/percent of
    （比率题同样要求 calc 工具族）——Tool F1 95.6% → 94.8% 是**口径变化**
    而非退化（此前比率题被静默豁免 calc 要求）。
+6. **Phase 10.1 ratio 锚定改进（六项）**：① 问题年份 token 直接匹配表格
+   年份行（"due in 2018" → 行 "2018"，不再依赖指标词典）；② "after
+   \<year\>" 映射 thereafter 行（"due after 2020" → 行 "2021 - thereafter"）；
+   ③ 正文/脚注级数值扫描（"42749 shares were repurchased..." 的分子在
+   正文不在表格，脚注标记 "(1)" 剔除防误抽）；④ 分母 total 行兜底——
+   **仅当分母短语扫描完全无候选时注入**（无条件注入会让其他表的合计行
+   压过正确行的弱短语命中，系统性引入错表分母）；⑤ 列一致性排序
+   （num/den 同列且列头词命中分母短语优先，防取到国别/子列值）；
+   ⑥ 负值剪枝（部分/整体非负）。**理想检索口径**（gold 文档全文直接
+   喂执行器，剥离检索层）ratio 锚定精度 **2/13 → 7/13**；端到端复跑
+   13 道 ratio 题答案全部按新锚定改变、EM 7.0% 持平零回归——上界瓶颈
+   从锚定层转移到检索层。复现：`scripts/verify_ratio_ideal.py`。
 
 ## 诚实边界（面试必答，已写入报告中）
 
@@ -140,9 +152,12 @@ LLM 规划层（失败降级规则 planner）、多跳 QA 合成管线（四重�
   覆盖 growth_pct / difference / cross_entity_diff / argmax_relay / ratio
   五类（真实 FinQA 计算子集 38%），table_sum/exp_avg 及多步 add 链由
   Phase 10 LLM 程序生成路径覆盖（基础设施就绪）。
-- **ratio 模板的真实精度**：100 样本检出执行 13 题对 1 题——失败主因是
-  操作数锚定误差（短语命中的表格行与金标操作数不一致），属短语锚定的
-  精度瓶颈，如实报告（EM 净增 +1 样本、零回归）。
+- **ratio 模板的真实精度**：100 样本检出执行 13 题对 1 题（端到端）。
+  Phase 10.1 六项锚定改进后，**理想检索口径**（gold 文档全文直接喂执行
+  器，剥离检索层）2/13 → 7/13——端到端仍对 1 题说明主要瓶颈已从锚定层
+  转移到检索层（doc recall 56%，金标文档未召回则锚定无从谈起）；
+  剩余 6 题理想检索失败属短语锚定精度上限（行标签与问题短语零词重叠 /
+  量纲与刻度错配），如实报告（EM 净增 +1 样本、零回归）。
 - **LLM 路径未接真实 provider 全量评测**（无 API key 不虚报数字）：DSL
   执行器 + 校验 + 降级以 mock provider 单测锁定语义；默认路径（无 LLM）
   行为与 Phase 9 完全一致，评测数字零外部依赖可复现。
@@ -160,6 +175,7 @@ LLM 规划层（失败降级规则 planner）、多跳 QA 合成管线（四重�
 | 合成 100% / 消融贡献 | [results/synth_check3/report.md](synth_check3/report.md) |
 | FinQA EM 6.0%（Phase 9）/ det 24% / recall 56% | [results/finqa_v8/report.md](finqa_v8/report.md) |
 | FinQA EM 7.0%（Phase 10）/ PoT 子集 38 题 | [results/finqa_v10/report.md](finqa_v10/report.md) |
+| ratio 理想检索 2/13→7/13（Phase 10.1） | `scripts/verify_ratio_ideal.py` + [results/finqa_v10_1/report.md](finqa_v10_1/report.md) |
 | ConvFinQA recall 65% | [results/convfinqa_check/report.md](convfinqa_check/report.md) |
 | 检索升级 recall 81%→86% | `scripts/compare_retrieval.py`（FinQA test 100 样本实测） |
 | 多跳基准 EM 37.5%→100% | [results/multihop_check/report.md](multihop_check/report.md) |
