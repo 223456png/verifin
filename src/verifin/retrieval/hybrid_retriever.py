@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import json
 import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
 
+from verifin.embedding import get_embedding_function
 from verifin.indexing.bm25_index import BM25Index
 from verifin.indexing.metadata_store import MetadataStore
 from verifin.indexing.vector_index import VectorIndex
@@ -173,9 +175,22 @@ class HybridRetriever:
         )
 
 
+def _read_embedding_from_manifest(persist_dir: Path) -> str:
+    """从构建期 manifest 读取向量索引 embedding 名（缺失时回退 hash）。"""
+    manifest = persist_dir / "indexes" / "manifest.json"
+    if manifest.is_file():
+        try:
+            data = json.loads(manifest.read_text(encoding="utf-8"))
+            return str(data.get("embedding") or "hash")
+        except (OSError, ValueError, json.JSONDecodeError):
+            return "hash"
+    return "hash"
+
+
 def build_hybrid_retriever(
     persist_dir: PathLike = ".",
     use_reranker: bool = True,
+    embedding: Optional[str] = None,
     **kwargs,
 ) -> HybridRetriever:
     """从 Phase 1 索引产物组装 HybridRetriever。
@@ -183,11 +198,19 @@ def build_hybrid_retriever(
     Args:
         persist_dir: 索引产物根目录（含 indexes/bm25.pkl、chroma_db/、verifin_metadata.db）。
         use_reranker: 是否构造 Reranker（False 时完全跳过精排组件）。
+        embedding: 向量索引 embedding 名（``hash``/``bge``）；None 时从 manifest.json
+            读取构建期选择，读不到则回退 hash。真实语义 embedding 由
+            :func:`verifin.embedding.get_embedding_function` 提供（bge 需
+            ``[bge]`` 依赖 + 模型权重，加载失败或缺失时按 Chroma 契约降级）。
         **kwargs: 透传给 HybridRetriever（如 fusion_method/dense_weight）。
     """
     root = Path(persist_dir)
+    embedding_name = embedding or _read_embedding_from_manifest(root)
     bm25 = BM25Index.load(root / "indexes" / "bm25.pkl")
-    vector = VectorIndex(persist_dir=str(root / "chroma_db"))
+    vector = VectorIndex(
+        persist_dir=str(root / "chroma_db"),
+        embedding=get_embedding_function(embedding_name),
+    )
     store = MetadataStore(path=str(root / "verifin_metadata.db"))
     reranker = Reranker() if use_reranker else None
     return HybridRetriever(

@@ -46,7 +46,7 @@ from verifin.core.nodes import (
 )
 from verifin.core.runner import AgentRunner
 from verifin.core.state import AgentState
-from verifin.embedding import HashEmbedding
+from verifin.embedding import get_embedding_function
 from verifin.indexing.bm25_index import BM25Index
 from verifin.indexing.metadata_store import MetadataStore
 from verifin.indexing.vector_index import VectorIndex
@@ -167,7 +167,9 @@ def build_benchmark_graph(config: Dict[str, bool]):
 class RetrievalEnvironment:
     """从语料 chunk 构建的内存索引 + 检索工具（dense=False 时仅 BM25）。"""
 
-    def __init__(self, chunks: List[DocumentChunk], workspace: Path) -> None:
+    def __init__(
+        self, chunks: List[DocumentChunk], workspace: Path, embedding: str = "hash"
+    ) -> None:
         # 每次初始化使用唯一子目录：前一次运行的 SQLite/Chroma 句柄可能仍持有
         # 文件句柄，删除会触发 readonly 冲突——唯一目录天然幂等且可重复运行
         self.root = Path(workspace) / f".index_env-{uuid.uuid4().hex[:8]}"
@@ -177,7 +179,8 @@ class RetrievalEnvironment:
         self.metadata = MetadataStore(path=str(self.root / "metadata.db"))
         self.metadata.upsert_chunks(chunks)
         self.vector = VectorIndex(
-            persist_dir=str(self.root / "chroma"), embedding=HashEmbedding()
+            persist_dir=str(self.root / "chroma"),
+            embedding=get_embedding_function(embedding),
         )
         self.vector.add_chunks(chunks)
         # Reranker 无 cross-encoder 模型时按 Phase 2 契约自动降级（跳过精排）
@@ -190,10 +193,14 @@ class RetrievalEnvironment:
 
     @classmethod
     def from_persist_dir(cls, persist_dir: Path) -> "RetrievalEnvironment":
-        """从 ``scripts/build_index.py`` 预构建的索引产物组装环境（真实数据集路径）。"""
+        """从 ``scripts/build_index.py`` 预构建的索引产物组装环境（真实数据集路径）。
+
+        embedding 名从构建期 manifest.json 读取，reranker 启用（懒加载，模型
+        缺失时按 Phase 2 契约自动降级透传，不影响回退路径）。
+        """
         env = cls.__new__(cls)
         env.root = Path(persist_dir)
-        env.hybrid = build_hybrid_retriever(persist_dir=persist_dir, use_reranker=False)
+        env.hybrid = build_hybrid_retriever(persist_dir=persist_dir)
         env.bm25 = env.hybrid.bm25
         env.metadata = env.hybrid.metadata
         env.vector = env.hybrid.vector
@@ -215,7 +222,7 @@ def _register_retrieve_tool(env: RetrievalEnvironment, dense: bool) -> None:
         filter_metadata: Optional[dict] = None,
     ):
         return env.hybrid.search(
-            query, top_k=top_k, use_reranker=False, filter_metadata=filter_metadata
+            query, top_k=top_k, use_reranker=use_reranker, filter_metadata=filter_metadata
         )
 
     def bm25_retrieve(
