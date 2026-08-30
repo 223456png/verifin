@@ -7,13 +7,15 @@ program（``subtract(5829, 5735), divide(#0, 5735)`` 等）在表格/文本数�
 :class:`ExpressionCalculator`（PoT 受限安全求值，AST 白名单三层防御）。
 
 诚实边界（报告必引）：
-- 模板覆盖四类：``growth_pct``（双年份增长率/占比变化）、``difference``
+- 确定性模板覆盖五类：``growth_pct``（双年份增长率/占比变化）、``difference``
   （单年份净变动，基期推断为上一年，FinQA 高频模式）、``cross_entity_diff``
   （同期跨实体差值，"How much higher was A than B in 2024"）、
-  ``argmax_relay``（多实体比较取极值 + 胜者第二指标接力查找）；
-- ``table_sum`` / ``exp_avg`` 等聚合算子仍未覆盖，属 LLM program 生成范畴
-  （Phase 10 规划）；
-- 每年/每实体候选数值 ≤4（按锚定分排序），组合 ≤16，任一刻度
+  ``argmax_relay``（多实体比较取极值 + 胜者第二指标接力查找）、``ratio``
+  （"what percentage of X is Y" 比率题，占 FinQA test 17%，Phase 10）；
+- 模板外的推导型问题由 Phase 10 :class:`LLMProgramGenerator` 生成 FinQA DSL
+  程序、:func:`execute_dsl` 多步执行（``#N`` 步骤引用）——LLM 不可用时
+  自动降级回确定性模板，行为与 Phase 9 一致；
+- 每年/每实体/每短语候选数值 ≤4（按锚定分排序），组合 ≤16，任一刻度
   命中 GT 记正确——候选程序枚举是 PoT 方法的确定性近似口径。
 """
 
@@ -52,6 +54,13 @@ _ARGMAX_RELAY_RE = re.compile(
     r".*?\bits\s+(?P<metric2>[a-z][a-z ]*?)\s*\?",
     re.IGNORECASE | re.DOTALL,
 )
+# ratio 模板（Phase 10）："what percentage/percent/portion/fraction of DEN
+# is/are NUM" → divide(NUM值, DEN值)——FinQA test 占 17% 的比率题型
+_RATIO_RE = re.compile(
+    r"\bwhat\s+(?:percentage|percent|portion|fraction)\s+of\s+"
+    r"(?P<den>.+?)\s+(?:is|are|was|were|do|does|did)\s+(?P<num>.+?)\s*[?.!]*\s*$",
+    re.IGNORECASE | re.DOTALL,
+)
 # 实体 token 过滤（问句虚词/比较级不作为实体）
 _ENTITY_STOPWORDS = {
     "what", "who", "which", "when", "where", "how", "among", "was", "is",
@@ -87,6 +96,10 @@ class ProgramSpec:
     # argmax_relay（Phase 9.7）：参与比较的实体列表 + 胜者第二指标
     entities: List[str] = field(default_factory=list)
     second_metric: Optional[str] = None
+    # ratio（Phase 10）：分子短语（部分值，"are leased" 的 leased 侧）与
+    # 分母短语（整体值，"of total facilities" 侧）→ divide(NUM, DEN)
+    numerator: Optional[str] = None
+    denominator: Optional[str] = None
 
 
 @dataclass
@@ -168,12 +181,15 @@ def detect_program(query: str) -> Optional[ProgramSpec]:
        and what was its <m2>?" —— 多实体比较取极值 + 胜者第二指标接力；
     2. **growth_pct**：计算关键词 + 两个不同年份（"from 2023 to 2024"）；
        反序表达（"X in 2024 compare to 2023"）交换基期与比较期；
-    3. **cross_entity_diff**：比较级 + than / difference between + 双实体
+    3. **ratio**（Phase 10）："what percentage/percent/portion/fraction
+       of <整体> is/are <部分>？" → ``divide(部分值, 整体值)``；年份 ≤1
+       （双年份归 growth_pct），FinQA test 占 17% 的比率题型；
+    4. **cross_entity_diff**：比较级 + than / difference between + 双实体
        （"How much higher was A revenue than B revenue in 2024" → A-B）；
        年份 ≤1 个（双年份归 growth_pct）；
-    4. **difference**：净变动关键词 + 单一年份（"net change in X during 2015"）
+    5. **difference**：净变动关键词 + 单一年份（"net change in X during 2015"）
        → 基期推断为上一年（FinQA 高频模式 ``subtract(cur, prev)``）；
-    5. 无关键词或无年份 → None（普通提取路径，防误伤）。
+    6. 无关键词或无年份 → None（普通提取路径，防误伤）。
     """
     lowered = (query or "").lower()
     if not lowered.strip():
@@ -207,7 +223,20 @@ def detect_program(query: str) -> Optional[ProgramSpec]:
                            target_period=target_period,
                            reversed="decrease" in lowered)
 
-    # 3. cross_entity_diff：比较级 + 双实体（年份 ≤1，双年份归 growth_pct）
+    # 3. ratio（Phase 10）：比率题型（年份 ≤1，双年份归 growth_pct）
+    if len(years) <= 1:
+        ratio = _RATIO_RE.search(query or "")
+        if ratio:
+            year = years[0] if years else ""
+            return ProgramSpec(
+                kind="ratio",
+                base_period=year,
+                target_period=year,
+                numerator=(ratio.group("num") or "").strip(),
+                denominator=(ratio.group("den") or "").strip(),
+            )
+
+    # 4. cross_entity_diff：比较级 + 双实体（年份 ≤1，双年份归 growth_pct）
     if len(years) <= 1 and (
         _COMPARATIVE_RE.search(lowered) or _DIFF_BETWEEN_RE.search(lowered)
     ):
@@ -228,7 +257,7 @@ def detect_program(query: str) -> Optional[ProgramSpec]:
                 entity_b=entities_b[0],
             )
 
-    # 4. difference：净变动关键词 + 单年份（基期 = 上一年）
+    # 5. difference：净变动关键词 + 单年份（基期 = 上一年）
     if (
         any(keyword in lowered for keyword in _DIFFERENCE_KEYWORDS)
         and len(years) == 1
@@ -273,6 +302,9 @@ class ProgramExecutor:
             return self._execute_cross_entity_diff(spec, candidates)
         if spec.kind == "argmax_relay":
             return self._execute_argmax_relay(spec, candidates)
+        # Phase 10：比率模板（candidates 键为 "num" / "den"）
+        if spec.kind == "ratio":
+            return self._execute_ratio(spec, candidates)
 
         def _sorted_bucket(period: str) -> List[ValueCandidate]:
             """按 anchor_score 升序截断（稳定排序，防低置信候选挤占名额）。"""
@@ -389,6 +421,94 @@ class ProgramExecutor:
             "anchor_score": base.anchor_score + target.anchor_score,
             "index": 0,
         }
+
+    # ------------------------------------------------------------------
+    # Phase 10：比率模板（"what percentage of X are Y" → divide(部分, 整体)）
+
+    def _execute_ratio(
+        self, spec: ProgramSpec, candidates: Dict[str, List[ValueCandidate]]
+    ) -> ProgramResult:
+        """比率："what percentage of <整体> are <部分>?" → ``divide(部分, 整体)``。
+
+        candidates 键为 ``"num"`` / ``"den"``（calculator 按分子/分母短语
+        锚定扫描收集）。GT 刻度：FinQA 比率题 exe_ans 多为**裸小数**
+        （0.14464），部分带 ``multiply(#0, const_100)``（16.94）→ 输出
+        fraction（裸）+ value（×100）双刻度，EM 池逐一尝试。
+
+        剪枝：|fraction| > 20 视为锚定错误（财报比率极少超 2000%）；
+        排序偏好 |fraction| ≤ 2（部分 ≤ 整体是常态，反向多为方向配错）。
+        """
+        def _bucket(key: str) -> List[ValueCandidate]:
+            bucket = list(candidates.get(key) or [])
+            bucket.sort(key=lambda c: c.anchor_score)
+            return bucket[:_MAX_CANDIDATES_PER_YEAR]
+
+        num_list, den_list = _bucket("num"), _bucket("den")
+        if not num_list or not den_list:
+            return ProgramResult(
+                kind=spec.kind,
+                error="missing numerator/denominator evidence values for ratio",
+                evidence=[c.chunk_id for lst in candidates.values() for c in lst],
+            )
+
+        combos: List[dict] = []
+        for num_c in num_list:
+            for den_c in den_list:
+                num_norm = normalize_to_base(num_c.value, num_c.unit)
+                den_norm = normalize_to_base(den_c.value, den_c.unit)
+                if num_norm is None or den_norm is None:
+                    continue  # 未知单位
+                if num_norm[1] != den_norm[1]:
+                    continue  # 量纲冲突（% vs million）
+                nv, dv = num_norm[0], den_norm[0]
+                if abs(dv) < 1e-9:
+                    continue  # 零分母
+                if num_c.chunk_id == den_c.chunk_id and num_c.value == den_c.value:
+                    continue  # 同一数值自除恒为 1，非有效组合
+                expression = f"({nv} / {dv})"
+                out = self._evaluator(expression)
+                out = out if isinstance(out, dict) else {}
+                fraction = out.get("value")
+                if out.get("is_valid") is False or fraction is None:
+                    continue
+                if abs(float(fraction)) > _MAX_ABS_GROWTH:
+                    continue  # 合理性剪枝：比率超 2000% 视为锚定错误
+                combos.append({
+                    "expression": expression,
+                    "fraction": round(float(fraction), 6),
+                    "num": num_c,
+                    "den": den_c,
+                    "anchor_score": num_c.anchor_score + den_c.anchor_score,
+                    "index": 0,
+                })
+
+        if not combos:
+            return ProgramResult(
+                kind=spec.kind,
+                error="no plausible value combination passed sanity pruning",
+                evidence=[c.chunk_id for c in num_list + den_list],
+            )
+
+        combos.sort(key=lambda c: (
+            c["anchor_score"],
+            0 if abs(c["fraction"]) <= 2.0 else 1,
+            c["index"],
+        ))
+        primary = combos[0]
+        return ProgramResult(
+            kind=spec.kind,
+            expression=primary["expression"],
+            value=round(primary["fraction"] * 100, 4),
+            unit="%",
+            fraction=primary["fraction"],
+            base=primary["den"].to_dict(),   # 整体（分母）
+            target=primary["num"].to_dict(),  # 部分（分子）
+            alternates=[
+                {"fraction": c["fraction"]}
+                for c in combos[1:3]
+            ],
+            evidence=[primary["num"].chunk_id, primary["den"].chunk_id],
+        )
 
     # ------------------------------------------------------------------
     # Phase 9.7：实体键控模板（跨实体差值 / argmax 接力）
@@ -545,3 +665,177 @@ class ProgramExecutor:
             target=second.to_dict(),
             evidence=[winner_cand.chunk_id, second.chunk_id],
         )
+
+
+# ----------------------------------------------------------------------
+# Phase 10：FinQA DSL 多步执行器（LLM program 生成的求值底座）
+# ----------------------------------------------------------------------
+
+# 算子白名单 → 元数（参数个数）
+_DSL_OPS: Dict[str, int] = {
+    "add": 2, "subtract": 2, "multiply": 2, "divide": 2, "exp": 2,
+    "greater": 2,
+    "table_sum": 1, "table_average": 1, "table_max": 1, "table_min": 1,
+}
+# 聚合算子（参数为值组绑定 tN，展开为算术表达式后过 evaluator）
+_DSL_AGG = {"table_sum", "table_average", "table_max", "table_min"}
+_DSL_CONST_RE = re.compile(r"^const_(\d+)$")
+_DSL_NUMBER_RE = re.compile(r"^-?\d+(?:\.\d+)?$")
+_DSL_STEP_RE = re.compile(r"^([a-z_]+)\s*\((.*)\)$")
+
+
+def _split_dsl_steps(program: str) -> List[str]:
+    """顶层逗号切分（括号内的逗号不切）。"""
+    steps: List[str] = []
+    depth, buf = 0, []
+    for ch in program:
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+        if ch == "," and depth == 0:
+            steps.append("".join(buf).strip())
+            buf = []
+        else:
+            buf.append(ch)
+    tail = "".join(buf).strip()
+    if tail:
+        steps.append(tail)
+    return [s for s in steps if s]
+
+
+def parse_dsl(program: str) -> List[tuple]:
+    """解析 FinQA DSL 程序 → ``[(op, [arg, ...]), ...]``。
+
+    形态：``subtract(5829, 5735), divide(#0, 5735)``（步骤间 ``#N`` 引用，
+    N 为 0 起的步骤序号）。参数为扁平 token（数字 / ``#N`` / ``const_K`` /
+    ``vN`` 候选值 / ``tN`` 值组），不支持嵌套调用（嵌套形态 ``program_re``
+    需先展开）。非法结构抛 :class:`ValueError`。
+    """
+    steps: List[tuple] = []
+    for raw in _split_dsl_steps(program or ""):
+        match = _DSL_STEP_RE.match(raw)
+        if not match:
+            raise ValueError(f"malformed DSL step: {raw!r}")
+        op = match.group(1)
+        args_raw = match.group(2).strip()
+        args = [a.strip() for a in args_raw.split(",")] if args_raw else []
+        if op not in _DSL_OPS:
+            raise ValueError(f"unknown DSL op: {op}")
+        if len(args) != _DSL_OPS[op]:
+            raise ValueError(f"op {op} expects {_DSL_OPS[op]} args, got {len(args)}")
+        steps.append((op, args))
+    if not steps:
+        raise ValueError("empty DSL program")
+    return steps
+
+
+def execute_dsl(
+    program: str,
+    bindings: Optional[Dict[str, object]] = None,
+    evaluator=None,
+) -> dict:
+    """执行 FinQA DSL 多步程序（Phase 10 LLM program 生成的求值底座）。
+
+    Args:
+        program: ``"subtract(5829, 5735), divide(#0, 5735)"`` 形态的步骤串。
+        bindings: ``{"v1": 8.1, ..., "t1": [1.0, 2.0]}``——``vN`` 单值候选、
+            ``tN`` 值组（聚合算子参数）。
+        evaluator: 表达式求值函数（默认 :func:`calc_expression`；Agent 节点
+            注入 ToolRegistry 版本保留 calc 工具族调用轨迹）。
+
+    Returns:
+        ``{"value", "expression", "steps": [{"op", "args", "value"}]}``；
+        任何非法（解析失败 / 未知算子 / 引用越界 / 除零）→ ``{"error": ...}``
+        不抛出（LLM 输出不可信，失败即降级）。
+
+    求值策略：算术算子逐步经 ``evaluator``（PoT 沙箱，保留轨迹）；
+    聚合算子展开为算术表达式（``table_sum(t) → (a + b + c)``）后同样过
+    evaluator；``greater`` 原生比较（bool 不经 eval）。
+    """
+    evaluator = evaluator or calc_expression
+    bindings = bindings or {}
+    try:
+        parsed = parse_dsl(program)
+    except ValueError as exc:
+        return {"error": str(exc)}
+
+    def _resolve_values(arg: str, step_index: int) -> Optional[float]:
+        """标量参数 → float；非法返回 None。"""
+        if _DSL_NUMBER_RE.match(arg):
+            return float(arg)
+        if _DSL_CONST_RE.match(arg):
+            return float(arg[len("const_"):])
+        if arg.startswith("#"):
+            if not arg[1:].isdigit() or int(arg[1:]) >= step_index:
+                return None  # 引用越界或前向引用
+            return results[int(arg[1:])]
+        value = bindings.get(arg)
+        return float(value) if isinstance(value, (int, float)) else None
+
+    results: List[float] = []
+    records: List[dict] = []
+    final_expression = ""
+    for step_index, (op, args) in enumerate(parsed):
+        if op in _DSL_AGG:
+            # 聚合算子：参数须为值组绑定 tN
+            group = bindings.get(args[0])
+            if not isinstance(group, list) or not group:
+                return {"error": f"{op} expects a non-empty value group: {args[0]}"}
+            try:
+                values = [float(v) for v in group]
+            except (TypeError, ValueError):
+                return {"error": f"non-numeric value group: {args[0]}"}
+            if op == "table_sum":
+                expr = "(" + " + ".join(f"{v:g}" for v in values) + ")"
+            elif op == "table_average":
+                expr = (
+                    "(" + " + ".join(f"{v:g}" for v in values) + ")"
+                    f" / {len(values)}"
+                )
+            else:  # table_max / table_min：原生求值（calc 无 max/min）
+                picked = max(values) if op == "table_max" else min(values)
+                results.append(float(picked))
+                records.append({"op": op, "args": args, "value": float(picked)})
+                final_expression = f"{op}({args[0]})"
+                continue
+            out = evaluator(expr)
+            out = out if isinstance(out, dict) else {}
+            if out.get("is_valid") is False or out.get("value") is None:
+                return {"error": f"{op} evaluation failed: {out.get('error')}"}
+            results.append(float(out["value"]))
+            records.append({"op": op, "args": args, "value": float(out["value"])})
+            final_expression = expr
+            continue
+
+        vals = []
+        for arg in args:
+            resolved = _resolve_values(arg, step_index)
+            if resolved is None:
+                return {"error": f"unresolvable arg: {arg!r} in {op}(...)"}
+            vals.append(resolved)
+        if op == "greater":
+            picked = 1.0 if vals[0] > vals[1] else 0.0
+            results.append(picked)
+            records.append({"op": op, "args": args, "value": picked})
+            final_expression = f"greater({vals[0]:g}, {vals[1]:g})"
+            continue
+        a, b = vals
+        symbol = {"add": "+", "subtract": "-", "multiply": "*",
+                  "divide": "/", "exp": "**"}[op]
+        if symbol == "/" and abs(b) < 1e-12:
+            return {"error": "division by zero"}
+        expr = f"({a:g} {symbol} {b:g})"
+        out = evaluator(expr)
+        out = out if isinstance(out, dict) else {}
+        if out.get("is_valid") is False or out.get("value") is None:
+            return {"error": f"{op} evaluation failed: {out.get('error')}"}
+        results.append(float(out["value"]))
+        records.append({"op": op, "args": args, "value": float(out["value"])})
+        final_expression = expr
+
+    return {
+        "value": results[-1],
+        "expression": final_expression,
+        "steps": records,
+    }

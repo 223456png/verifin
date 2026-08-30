@@ -92,6 +92,16 @@ def test_tool_f1_calculation() -> None:
     # pseudo-gold：增长类多跳问题要求 calc 工具族
     assert "calc" in generate_pseudo_gold("What was the percentage growth in revenue?")
     assert "calc" not in generate_pseudo_gold("What was revenue in 2024?")
+    # Phase 10：比率类（portion/fraction/percent of）要求 calc
+    assert "calc" in generate_pseudo_gold(
+        "what portion of total facilities are leased facilities?"
+    )
+    assert "calc" in generate_pseudo_gold(
+        "what fraction of the portfolio was fixed rate?"
+    )
+    assert "calc" in generate_pseudo_gold(
+        "what percent of total revenue came from leasing?"
+    )
 
 
 # 4. 重规划有效率：Replan 触发样本中裁决非 REJECT 的比例（PARTIAL 计入）

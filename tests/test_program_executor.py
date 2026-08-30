@@ -1,4 +1,4 @@
-"""Phase 9 — FinQA program DSL 模板执行器测试（detect_program / ProgramExecutor）。"""
+"""Phase 9/10 — FinQA program DSL 模板执行器测试（detect_program / ProgramExecutor / execute_dsl）。"""
 
 from __future__ import annotations
 
@@ -9,6 +9,8 @@ from verifin.tools.program_executor import (
     ProgramSpec,
     ValueCandidate,
     detect_program,
+    execute_dsl,
+    parse_dsl,
 )
 from verifin.tools.evidence import EvidenceExtractor
 
@@ -245,3 +247,174 @@ def test_collect_entity_values() -> None:
     assert EvidenceExtractor.collect_entity_values(revenue_chunk, "Vertex", "2024", "gross_margin") == []
     # 年份不符 → 空
     assert EvidenceExtractor.collect_entity_values(margin_chunk, "Vertex", "2023", "gross_margin") == []
+
+
+# ---------------------------------------------------------------------------
+# Phase 10 — ratio 模板（"what percentage of X are Y" → divide(Y值, X值)）
+
+# 15. ratio 检测：分子/分母短语抽取（FinQA test 占 17% 的比率题型）
+def test_detect_ratio_program() -> None:
+    spec = detect_program(
+        "what percentage of the total number of leased and owned properties "
+        "were leased?"
+    )
+    assert spec is not None
+    assert spec.kind == "ratio"
+    assert spec.denominator == "the total number of leased and owned properties"
+    assert spec.numerator == "leased"
+    # 带年份单年份形态：year 记录在 base/target period
+    with_year = detect_program(
+        "what portion of total facilities are leased facilities in 2017?"
+    )
+    assert with_year is not None and with_year.kind == "ratio"
+    assert with_year.base_period == "2017"
+    # 双年份比率表达归 growth_pct（不劫持既有路径）
+    two_years = detect_program(
+        "what percentage of 2018 revenue is 2017 revenue?"
+    )
+    assert two_years is not None and two_years.kind == "growth_pct"
+
+
+# 16. ratio 执行：num/den 候选 → divide(部分, 整体)，双刻度输出
+def test_execute_ratio() -> None:
+    spec = ProgramSpec(
+        kind="ratio", base_period="2017", target_period="2017",
+        numerator="leased facilities", denominator="total facilities",
+    )
+    result = ProgramExecutor().execute(spec, {
+        "num": [ValueCandidate(value=8.1, unit=None, period="2017")],
+        "den": [ValueCandidate(value=56.1, unit=None, period="2017")],
+    })
+    assert result.fraction == pytest.approx(8.1 / 56.1)
+    assert result.value == pytest.approx(8.1 / 56.1 * 100)
+    assert result.unit == "%"
+    assert result.expression == "(8.1 / 56.1)"
+    assert result.base["value"] == pytest.approx(56.1)   # 整体（分母）
+    assert result.target["value"] == pytest.approx(8.1)  # 部分（分子）
+    # 缺一侧候选 → error 降级
+    missing = ProgramExecutor().execute(spec, {
+        "num": [ValueCandidate(value=8.1, unit=None, period="2017")],
+    })
+    assert missing.fraction is None
+    assert "missing" in (missing.error or "")
+    # 量纲冲突（% vs million）与零分母组合被剪枝
+    mixed = ProgramExecutor().execute(spec, {
+        "num": [ValueCandidate(value=8.1, unit="%", period="2017")],
+        "den": [ValueCandidate(value=56.1, unit="million", period="2017")],
+    })
+    assert mixed.fraction is None
+    assert "plausible" in (mixed.error or "")
+    # 同一数值自除（chunk_id 相同且值相同）非有效组合
+    same = ProgramExecutor().execute(spec, {
+        "num": [ValueCandidate(value=56.1, unit=None, period="2017", chunk_id="c1")],
+        "den": [ValueCandidate(value=56.1, unit=None, period="2017", chunk_id="c1")],
+    })
+    assert same.fraction is None
+
+
+# 17. ratio 排序偏好：|fraction| ≤ 2（部分 ≤ 整体）优先于反向配对
+def test_execute_ratio_ordering() -> None:
+    spec = ProgramSpec(
+        kind="ratio", base_period="", target_period="",
+        numerator="leased", denominator="total",
+    )
+    result = ProgramExecutor().execute(spec, {
+        "num": [ValueCandidate(value=56.1, unit=None, period="", chunk_id="c1")],
+        "den": [
+            # 反向：56.1/8.1 ≈ 6.92；正向：56.1/56.1 = 1（chunk_id 不同，
+            # 防「同 chunk 同值自除」剪枝误伤）
+            ValueCandidate(value=8.1, unit=None, period="", chunk_id="c2"),
+            ValueCandidate(value=56.1, unit=None, period="", chunk_id="c3"),
+        ],
+    })
+    # 同锚分下 |fraction|≤2 的组合胜出（1.0 < 6.92）
+    assert result.fraction == pytest.approx(1.0)
+
+
+# 18. 短语锚定表格扫描：行标签 × 短语实词重叠（无年份比率题的候选来源）
+def test_collect_phrase_values() -> None:
+    content = (
+        "| ( in millions ) | amount |\n"
+        "| leased facilities | 56 |\n"
+        "| total facilities | 100 |\n"
+        "| owned properties | 44 |\n"
+    )
+    leased = EvidenceExtractor.collect_phrase_values(content, "leased facilities")
+    assert leased and leased[0]["value"] == pytest.approx(56.0)
+    assert leased[0]["row_label"] == "leased facilities"
+    assert leased[0]["anchor_score"] == 0.0  # 双向全覆盖命中
+    total = EvidenceExtractor.collect_phrase_values(content, "total facilities")
+    assert total and total[0]["value"] == pytest.approx(100.0)
+    # 无关短语：无行命中 → 全部候选均为低置信（anchor ≥ 1，无强锚定）
+    unrelated = EvidenceExtractor.collect_phrase_values(content, "goodwill impairment")
+    assert unrelated and all(item["anchor_score"] >= 1.0 for item in unrelated)
+    # 空短语 → 空
+    assert EvidenceExtractor.collect_phrase_values(content, "") == []
+
+
+# ---------------------------------------------------------------------------
+# Phase 10 — DSL 多步执行器（LLM program 生成的求值底座）
+
+# 19. parse_dsl：顶层逗号切分 + 算子白名单 + 元数校验
+def test_parse_dsl() -> None:
+    steps = parse_dsl("subtract(5829, 5735), divide(#0, 5735)")
+    assert steps == [("subtract", ["5829", "5735"]), ("divide", ["#0", "5735"])]
+    # 嵌套调用不是合法步骤（顶层切分后 op 为 add 但参数被切碎 → 元数不符）
+    with pytest.raises(ValueError):
+        parse_dsl("add(divide(1, 2), 3)")
+    with pytest.raises(ValueError):
+        parse_dsl("unknown_op(1, 2)")
+    with pytest.raises(ValueError):
+        parse_dsl("add(1)")  # 元数不符
+    with pytest.raises(ValueError):
+        parse_dsl("")
+
+
+# 20. execute_dsl：#N 步骤引用 + 数字/const/绑定参数
+def test_execute_dsl_steps() -> None:
+    out = execute_dsl("subtract(5829, 5735), divide(#0, 5735)")
+    assert out["value"] == pytest.approx(94.0 / 5735.0)
+    assert out["expression"] == "(94 / 5735)"  # 末步表达式（#0 已解析为 94）
+    assert len(out["steps"]) == 2
+    assert out["steps"][0]["value"] == pytest.approx(94.0)
+    # 候选绑定 vN + 常量 const_K
+    out2 = execute_dsl(
+        "divide(v1, v2), multiply(#0, const_100)",
+        {"v1": 8.1, "v2": 56.1},
+    )
+    assert out2["value"] == pytest.approx(8.1 / 56.1 * 100)
+    # greater 原生比较（bool → 1.0/0.0）
+    assert execute_dsl("greater(5, 3)")["value"] == 1.0
+    assert execute_dsl("greater(3, 5)")["value"] == 0.0
+
+
+# 21. execute_dsl：聚合算子（值组 tN 展开）
+def test_execute_dsl_aggregations() -> None:
+    assert execute_dsl("table_sum(t1)", {"t1": [1.5, 2.5, 3.0]})["value"] == pytest.approx(7.0)
+    assert execute_dsl("table_average(t1)", {"t1": [1.0, 2.0, 4.0]})["value"] == pytest.approx(7.0 / 3.0)
+    assert execute_dsl("table_max(t1)", {"t1": [1.0, 9.0, 4.0]})["value"] == pytest.approx(9.0)
+    assert execute_dsl("table_min(t1)", {"t1": [1.0, 9.0, 4.0]})["value"] == pytest.approx(1.0)
+    # 聚合后可被后续步骤引用（#0）
+    out = execute_dsl(
+        "table_sum(t1), subtract(#0, v1)",
+        {"t1": [10.0, 20.0], "v1": 5.0},
+    )
+    assert out["value"] == pytest.approx(25.0)
+
+
+# 22. execute_dsl：非法输入 → error 字典（不抛出）
+def test_execute_dsl_errors() -> None:
+    # 前向引用
+    assert "error" in execute_dsl("divide(#1, v1)", {"v1": 1.0})
+    # 引用越界
+    assert "error" in execute_dsl("add(#5, 1), divide(#0, 2)")
+    # 绑定缺失（幻觉引用）
+    assert "error" in execute_dsl("divide(v3, v1)", {"v1": 1.0})
+    # 除零
+    assert "error" in execute_dsl("divide(1, 0)")
+    # 非法算子
+    assert "error" in execute_dsl("sin(1, 2)")
+    # 聚合参数不是值组
+    assert "error" in execute_dsl("table_sum(v1)", {"v1": 1.0})
+    # 空值组
+    assert "error" in execute_dsl("table_sum(t1)", {"t1": []})
