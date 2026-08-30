@@ -1,0 +1,14 @@
+{
+  "explicit": [
+    {"pattern": "只看年报|年报优先|annual report|财报原文|10-?k", "preference": "source", "value": "annual_report"},
+    {"pattern": "新闻稿|press release", "preference": "source", "value": "news"},
+    {"pattern": "研报|券商报告|research report|analyst report", "preference": "source", "value": "research"},
+    {"pattern": "合并口径|consolidated", "preference": "consolidation", "value": true},
+    {"pattern": "单体口径|standalone|non-consolidated", "preference": "consolidation", "value": false},
+    {"pattern": "只看\\s*(20\\d{2}|FY\\s?20\\d{2})", "preference": "period", "value": null, "match_group": 1}
+  ],
+  "implicit": {
+    "consecutive_entity_turns": 3,
+    "min_metric_turns": 2
+  }
+}

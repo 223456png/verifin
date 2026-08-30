@@ -1,0 +1,25 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# 运行期索引产物（可再生）
+indexes/
+chroma_db/
+verifin_metadata.db
+*.db
+.verifin_api_env/
+
+# 实验产出（Phase 7 benchmark 原始数据与报告，可再生）
+results/
+
+# 数据（真实数据集不入库，仅保留样例）
+data/*
+!data/finqa/
+data/finqa/*
+!data/finqa/sample_1.jsonl
+
+# 系统文件
+.DS_Store
