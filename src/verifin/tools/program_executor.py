@@ -22,7 +22,7 @@ program（``subtract(5829, 5735), divide(#0, 5735)`` 等）在表格/文本数�
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Dict, List, Optional
 
 from verifin.tools.calculator import calc_expression
@@ -112,6 +112,9 @@ class ValueCandidate:
     chunk_id: Optional[str] = None
     # 锚定分（越小越可信：0 = 四要素校验通过的证据；>0 = 到年份提及的字符距离）
     anchor_score: float = 0.0
+    # Phase 10.1：短语锚定来源的行标签/列头（比率流列一致性与 total 行偏好）
+    row_label: str = ""
+    column: str = ""
 
     def to_dict(self) -> dict:
         return {
@@ -436,10 +439,35 @@ class ProgramExecutor:
         fraction（裸）+ value（×100）双刻度，EM 池逐一尝试。
 
         剪枝：|fraction| > 20 视为锚定错误（财报比率极少超 2000%）；
-        排序偏好 |fraction| ≤ 2（部分 ≤ 整体是常态，反向多为方向配错）。
+        负值操作数跳过（部分/整体非负）；
+        排序偏好（Phase 10.1）：
+        1. 锚定分（分母 total 行加权 −0.35："percentage of X" 的 X 几乎
+           总是合计行；分子 total 行 +0.2 反之）；
+        2. 列一致性：num/den 同列且列头词与分母短语重叠
+           （"total facilities as measured in square feet" → total 列，
+           防止取到 US/其他国别列的子值）；
+        3. |fraction| ≤ 2（部分 ≤ 整体是常态，反向多为方向配错）。
         """
+        _TOTAL_ROW_RE = re.compile(r"(?:^|[^a-z])total\b", re.IGNORECASE)
+
+        def _is_total_row(cand: ValueCandidate) -> bool:
+            return bool(_TOTAL_ROW_RE.search(cand.row_label or ""))
+
+        den_words = set(re.findall(r"[a-z]+", (spec.denominator or "").lower()))
+        has_total_in_den_phrase = "total" in den_words
+
+        def _adjusted(cand: ValueCandidate, key: str) -> float:
+            """角色调整后的有效锚分（total 行偏好/惩罚计入组合排序）。"""
+            if _is_total_row(cand) and not has_total_in_den_phrase:
+                return cand.anchor_score + (-0.35 if key == "den" else 0.2)
+            return cand.anchor_score
+
         def _bucket(key: str) -> List[ValueCandidate]:
             bucket = list(candidates.get(key) or [])
+            # 有效锚分替换 anchor_score：组合层排序直接继承角色偏好
+            bucket = [
+                replace(c, anchor_score=_adjusted(c, key)) for c in bucket
+            ]
             bucket.sort(key=lambda c: c.anchor_score)
             return bucket[:_MAX_CANDIDATES_PER_YEAR]
 
@@ -463,6 +491,8 @@ class ProgramExecutor:
                 nv, dv = num_norm[0], den_norm[0]
                 if abs(dv) < 1e-9:
                     continue  # 零分母
+                if nv < 0 or dv < 0:
+                    continue  # 部分/整体非负（Phase 10.1）
                 if num_c.chunk_id == den_c.chunk_id and num_c.value == den_c.value:
                     continue  # 同一数值自除恒为 1，非有效组合
                 expression = f"({nv} / {dv})"
@@ -473,12 +503,23 @@ class ProgramExecutor:
                     continue
                 if abs(float(fraction)) > _MAX_ABS_GROWTH:
                     continue  # 合理性剪枝：比率超 2000% 视为锚定错误
+                # 列一致性（Phase 10.1）：num/den 同列且列头词命中分母短语
+                col_lower = (den_c.column or "").lower()
+                same_column = bool(
+                    num_c.column and den_c.column
+                    and num_c.column.lower() == col_lower
+                )
+                column_pref = same_column and bool(
+                    set(re.findall(r"[a-z]+", col_lower)) & den_words
+                )
                 combos.append({
                     "expression": expression,
                     "fraction": round(float(fraction), 6),
                     "num": num_c,
                     "den": den_c,
                     "anchor_score": num_c.anchor_score + den_c.anchor_score,
+                    "column_pref": 0 if column_pref else 1,
+                    "same_column": 0 if same_column else 1,
                     "index": 0,
                 })
 
@@ -491,6 +532,8 @@ class ProgramExecutor:
 
         combos.sort(key=lambda c: (
             c["anchor_score"],
+            c["column_pref"],
+            c["same_column"],
             0 if abs(c["fraction"]) <= 2.0 else 1,
             c["index"],
         ))

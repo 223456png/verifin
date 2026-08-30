@@ -648,6 +648,10 @@ def _ratio_candidates(s: dict, program_spec) -> Dict[str, list]:
     from verifin.tools.program_executor import ValueCandidate
 
     candidates: Dict[str, List[ValueCandidate]] = {"num": [], "den": []}
+    # total 行回退候选（Phase 10.1）：仅当分母短语扫描**完全无候选**时启用，
+    # 无条件注入会让证据中其他表的合计行（anchor 0.75）压过正确行的
+    # 弱短语命中（单 token 命中 anchor 1.0），系统性引入错表分母
+    total_fallback: List[tuple] = []
     query_text = _latest_user_query(s)
     year = program_spec.base_period or None
 
@@ -662,6 +666,8 @@ def _ratio_candidates(s: dict, program_spec) -> Dict[str, list]:
                 period=str(item.get("period") or year or ""),
                 chunk_id=chunk_id,
                 anchor_score=penalty + float(item.get("anchor_score", 0.0)),
+                row_label=str(item.get("row_label") or ""),
+                column=str(item.get("column") or ""),
             )
         )
 
@@ -680,6 +686,12 @@ def _ratio_candidates(s: dict, program_spec) -> Dict[str, list]:
                     items = EvidenceExtractor.collect_year_values(content, year)
             for item in items:
                 _add(bucket, item, chunk_id, penalty)
+        # 分母 total 行回退候选（Phase 10.1）：先缓存，仅当分母短语扫描
+        # 完全无候选时兜底启用（"percentage of X" 的 X 几乎总是合计行，
+        # 但 X 短语与行标签常零词重叠——"future minimum rental payments"
+        # vs 行 "total"）
+        for item in EvidenceExtractor.collect_total_values(content):
+            total_fallback.append((item, chunk_id, penalty))
 
     for doc in [d for d in (s.get("retrieved_docs") or []) if isinstance(d, dict)]:
         _scan(str(doc.get("content") or ""), doc.get("chunk_id"))
@@ -708,6 +720,11 @@ def _ratio_candidates(s: dict, program_spec) -> Dict[str, list]:
                     chunk.get("chunk_id"),
                     penalty=0.25,
                 )
+
+    # 分母短语全空 → total 行回退兜底（直接 chunk 优先于父文档补全来源）
+    if not candidates["den"]:
+        for item, chunk_id, penalty in total_fallback:
+            _add("den", item, chunk_id, penalty)
     return candidates
 
 

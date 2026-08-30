@@ -128,7 +128,7 @@ VeriFin 的答案：**以证据校验为中心的 Agent 循环** —— 检索 �
 | PoT 计算子集规模 | — | 25 题 | **38 题** | +13（ratio 模板） |
 | 文档级召回 recall@20 | 48% | **56%** | 56% | +8 pp |
 
-**答案类型分解**（诚实口径）：提取型 4% / 推导型 93%（需 program 算术）/ 布尔型 3%。确定性模板覆盖 growth_pct / difference / cross_entity_diff / argmax_relay / **ratio**（"what percentage of X are Y"，FinQA test 占 ~17%）五类。Phase 10 ratio 模板在 100 样本上检出执行 13 题（此前 0）、新增 1 题正确（无样本由对转错）；未正确的主因是操作数锚定误差（短语命中的表格行与金标操作数不一致）。LLM 程序生成路径（table_sum / exp_avg / 多步算术链）基础设施就绪（DSL 执行器 + 校验 + 降级），未接真实 provider 全量评测（无 API key 不虚报数字），见 Roadmap。
+**答案类型分解**（诚实口径）：提取型 4% / 推导型 93%（需 program 算术）/ 布尔型 3%。确定性模板覆盖 growth_pct / difference / cross_entity_diff / argmax_relay / **ratio**（"what percentage of X are Y"，FinQA test 占 ~17%）五类。Phase 10 ratio 模板在 100 样本上检出执行 13 题（此前 0）、新增 1 题正确（无样本由对转错）。Phase 10.1 锚定改进（年份 token / "after \<year\>"→thereafter 行 / 正文脚注扫描 / 分母 total 行兜底 / 列一致性 / 负值剪枝）后，**理想检索口径**（gold 文档全文直接喂给执行器，剥离检索层）ratio 锚定精度 **2/13 → 7/13**；端到端复跑 EM 7.0% 持平（13 道 ratio 题答案全部按新锚定改变、零回归）——上界瓶颈从锚定层转移到检索层（doc recall 56%）。复现：`scripts/verify_ratio_ideal.py`。LLM 程序生成路径（table_sum / exp_avg / 多步算术链）基础设施就绪（DSL 执行器 + 校验 + 降级），未接真实 provider 全量评测（无 API key 不虚报数字），见 Roadmap。
 
 ### 真实 ConvFinQA dev 多轮（100 轮）
 
@@ -159,7 +159,7 @@ VeriFin 的答案：**以证据校验为中心的 Agent 循环** —— 检索 �
 > 语义 embedding（bge-small-en-v1.5）替换无语义哈希向量带来明确提升；通用
 > cross-encoder rerank 在此口径无益，属诚实边界。复现：`scripts/compare_retrieval.py`。
 
-完整报告见 `results/finqa_v8/report.md`（Phase 9）、`results/finqa_v10/report.md`（Phase 10）、`results/convfinqa_check/report.md`、`results/synth_check4/report.md`、`results/multihop_check/report.md`（含错误分析与诚实声明）。
+完整报告见 `results/finqa_v8/report.md`（Phase 9）、`results/finqa_v10/report.md`（Phase 10）、`results/finqa_v10_1/report.md`（Phase 10.1 锚定改进复跑）、`results/convfinqa_check/report.md`、`results/synth_check4/report.md`、`results/multihop_check/report.md`（含错误分析与诚实声明）。
 
 ---
 
@@ -255,7 +255,7 @@ src/verifin/
 
 ## Roadmap
 
-- [x] **Phase 10**：ratio 比率模板（短语锚定，FinQA test 占 ~17% 的题型，EM 6.0% → 7.0%）+ FinQA DSL 多步执行器（`#N` 引用 / table_sum / table_average）+ 可插拔 LLM 程序生成器（结构校验 + 失败降级，mock provider 单测锁定语义）
+- [x] **Phase 10**：ratio 比率模板（短语锚定，FinQA test 占 ~17% 的题型，EM 6.0% → 7.0%）+ FinQA DSL 多步执行器（`#N` 引用 / table_sum / table_average）+ 可插拔 LLM 程序生成器（结构校验 + 失败降级，mock provider 单测锁定语义）；Phase 10.1 ratio 锚定改进（年份 token / thereafter 行 / 正文脚注扫描 / 分母 total 行兜底 / 列一致性 / 负值剪枝，理想检索口径 2/13 → 7/13，181 项测试全绿）
 - [ ] LLM program 生成接入真实 provider 全量评测（基础设施就绪，无 API key 不虚报数字）；覆盖 FinQA 剩余 ~70% 推导型问题
 - [x] 真实语义 embedding（bge-small-en-v1.5）替换 hash-Dense（doc recall +5 pp）
 - [x] 可插拔 LLM 规划层（任意 provider，失败降级规则 planner，零外部依赖兜底）

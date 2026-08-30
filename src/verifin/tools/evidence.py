@@ -29,6 +29,12 @@ _PERIOD_RE = re.compile(r"\b(20\d{2}|FY\s?20\d{2}|Q[1-4]\s?20\d{2})\b")
 # 单位可选；% 无词边界要求，词单位（million/billion/M/B）要求词边界
 _VALUE_RE = re.compile(r"\$?\s*(\d[\d,]*\.?\d*)\s*(%|(?:million|billion|[MB])\b)?", re.IGNORECASE)
 _YEAR_VALUE_RE = re.compile(r"\b20\d{2}\b")
+# Phase 10.1：短语/行标签中的年份 token（"due in 2018" → 行 "2018"）
+# 与 "after <year>" → thereafter 行（"due after 2020" → 行 "2021 - thereafter"）
+_PHRASE_YEAR_RE = re.compile(r"\b((?:19|20)\d{2})\b")
+_AFTER_YEAR_RE = re.compile(r"\bafter\s+((?:19|20)\d{2})\b", re.IGNORECASE)
+# Phase 10.1：脚注引用标记（"( 1 ) ( 2 )"）——非财经数值
+_FOOTNOTE_MARKER_RE = re.compile(r"\(\s*\d{1,2}\s*\)")
 # Phase 8：年份锚定抽取的最大字符窗口（数值与年份提及距离超过该值不视为同上下文）
 _YEAR_ANCHOR_WINDOW = 200
 # Phase 9：数值出现在年份**之前**的距离惩罚（财报语序 "in 2015 ... $5829" 年份先行）
@@ -498,6 +504,26 @@ class EvidenceExtractor:
         }
 
     @classmethod
+    def _phrase_token_set(cls, phrase: str) -> tuple:
+        """短语扩展 token 集（Phase 10.1）：实词 + 年份 token。
+
+        - ``"due in 2018"`` → ``{due(去停用词后无), y2018}``，可命中
+          纯年份行标签 ``2018``（FinQA 到期表行标签即年份）；
+        - ``"due after 2020"`` → 年份上界语义：排除 ≤2020 的年份 token、
+          补 ``thereafter`` token，命中 ``2021 - thereafter`` 行。
+        返回 ``(word_tokens, year_tokens)``。
+        """
+        text = (phrase or "").lower()
+        after_match = _AFTER_YEAR_RE.search(text)
+        words = cls._content_tokens(text)
+        years = {f"y{m.group(1)}" for m in _PHRASE_YEAR_RE.finditer(text)}
+        if after_match:
+            bound = int(after_match.group(1))
+            years = {y for y in years if int(y[1:]) > bound}
+            words = (words - {"after"}) | {"thereafter"}
+        return words, years
+
+    @classmethod
     def collect_phrase_values(
         cls, content: str, phrase: str, year: Optional[str] = None,
         max_n: int = 6,
@@ -514,12 +540,38 @@ class EvidenceExtractor:
           取行内数值单元格；
         - anchor_score = ``1 - 双向词重叠率``（行标签与短语实词的双向
           覆盖率取大，越大越可信）；返回值带 ``row_label`` / ``column``
-          （LLM program 生成的候选上下文也复用本字段）。
+          （LLM program 生成的候选上下文也复用本字段）；
+        - **年份 token 匹配**（Phase 10.1）：短语含年份（"due in 2018"）或
+          "after <year>"（→ ``thereafter`` 行）时，纯年份行标签可命中——
+          FinQA 到期/承诺表的行标签即年份；
+        - **正文句级扫描**（Phase 10.1）：分子常在脚注正文（"42749 shares
+          were repurchased in open-market transactions"）而非表格——
+          非表格行与短语词重叠 ≥ 阈值时，行内数值成为候选
+          （``row_label`` = 行首片段，供分母 total 行偏好等下游语义）。
         """
-        phrase_tokens = cls._content_tokens(phrase or "")
-        if not phrase_tokens:
+        phrase_words, phrase_years = cls._phrase_token_set(phrase or "")
+        phrase_all = phrase_words | phrase_years
+        if not phrase_all:
             return []
         out: List[dict] = []
+
+        def _row_shared(label: str) -> Optional[tuple]:
+            """行标签 × 短语的共享 token 与双向重叠率（无重叠返回 None）。"""
+            label_words = cls._content_tokens(label)
+            label_years = {
+                f"y{m.group(1)}" for m in _PHRASE_YEAR_RE.finditer(label)
+            }
+            label_all = label_words | label_years
+            if not label_all:
+                return None
+            shared = label_all & phrase_all
+            if not shared:
+                return None
+            overlap = max(
+                len(shared) / len(label_all), len(shared) / len(phrase_all),
+            )
+            return shared, overlap
+
         for table in parse_tables(content):
             column_years = _table_column_years(table)
             header_row = table.headers[-1] if table.headers else []
@@ -531,14 +583,10 @@ class EvidenceExtractor:
                 if not cells or not cells[0].strip():
                     continue
                 label = cells[0].strip()
-                label_tokens = cls._content_tokens(label)
-                if not label_tokens:
+                matched = _row_shared(label)
+                if matched is None:
                     continue
-                shared = label_tokens & phrase_tokens
-                overlap = max(
-                    len(shared) / len(label_tokens),
-                    len(shared) / len(phrase_tokens),
-                )
+                shared, overlap = matched
                 # 单 token 命中多为泛化词（"total"/"current"）假阳性 → 加惩罚
                 anchor = 1.0 - overlap + (0.25 if len(shared) < 2 else 0.0)
 
@@ -572,6 +620,45 @@ class EvidenceExtractor:
                                 parsed[0], parsed[1],
                                 header_row[col].strip() if col < len(header_row) else "",
                             )
+
+        # 正文句级扫描（Phase 10.1）：分子常在脚注正文而非表格
+        # （"42749 shares were repurchased in open-market transactions"）。
+        # 非表格行（非 ``|`` 开头）与短语词重叠达阈值时，行内数值成候选。
+        for line in (content or "").splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("|"):
+                continue  # 表格行 / 空行
+            line_words = cls._content_tokens(stripped)
+            line_years = {
+                f"y{m.group(1)}" for m in _PHRASE_YEAR_RE.finditer(stripped)
+            }
+            line_all = line_words | line_years
+            if not line_all:
+                continue
+            shared = line_all & phrase_all
+            if not shared:
+                continue
+            overlap = len(shared) / max(len(phrase_all), 1)
+            # 阈值：短语覆盖 ≥ 1/3 或 ≥2 实词命中（防单泛化词行假阳性）
+            if overlap < 0.3 and len(shared & phrase_words) < 2:
+                continue
+            anchor = 1.0 - min(overlap, 1.0) + (0.25 if len(shared) < 2 else 0.0)
+            row_label = stripped[:40]
+            # 剥离脚注标记（"( 1 ) ( 2 )"）：FinQA 正文行首的括号小编号
+            # 是表格脚注引用而非财经数值（"42749 shares were repurchased
+            # ..." 前的 "( 1 )" 会以 1.0 污染分子候选且锚分并列优先）
+            numeric_line = _FOOTNOTE_MARKER_RE.sub(" ", stripped)
+            for num_start, num_end, value, unit in cls._number_spans(numeric_line):
+                out.append({
+                    "value": value,
+                    "unit": unit,
+                    "period": str(year or ""),
+                    "row_label": row_label,
+                    "column": "",
+                    "anchor_score": round(anchor + 0.1, 3),  # 正文来源轻微惩罚
+                    "source": "text",
+                })
+
         out.sort(key=lambda item: item["anchor_score"])
         # 同表同值去重（多级表头承接产生的重复）
         seen, deduped = set(), []
@@ -582,6 +669,42 @@ class EvidenceExtractor:
             seen.add(key)
             deduped.append(item)
         return deduped[:max_n]
+
+    @classmethod
+    def collect_total_values(cls, content: str, max_n: int = 4) -> List[dict]:
+        """表格 total 行数值候选（Phase 10.1 比率流分母回退）。
+
+        "what percentage of X" 的 X 几乎总是某张表的合计行（"total" /
+        "total xxx" / "xxx total"），但 X 短语与行标签常零词重叠
+        （"future minimum rental payments" vs 行 "total"）——短语锚定
+        扫不到任何分母候选时，以本回退补充。anchor_score 固定 0.75：
+        低于真实短语命中（≤0.5），高于泛化兜底（1.25）。
+        """
+        out: List[dict] = []
+        for table in parse_tables(content):
+            header_row = table.headers[-1] if table.headers else []
+            for row_index, cells in enumerate(table.rows):
+                if not cells or not cells[0].strip():
+                    continue
+                label = cells[0].strip()
+                if not re.search(r"^total\b|\btotal[:]?$", label, re.IGNORECASE):
+                    continue
+                for col in range(1, len(cells)):
+                    parsed = _parse_cell_value(cells[col])
+                    if parsed is None:
+                        continue
+                    out.append({
+                        "value": parsed[0],
+                        "unit": parsed[1],
+                        "period": "",
+                        "row_label": label,
+                        "column": (
+                            header_row[col].strip() if col < len(header_row) else ""
+                        ),
+                        "anchor_score": 0.75,
+                        "source": "total_row",
+                    })
+        return out[:max_n]
 
     @classmethod
     def collect_year_values(
