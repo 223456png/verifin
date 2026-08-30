@@ -23,7 +23,9 @@ from typing import Any, Dict, List, Optional
 from langgraph.graph import END, StateGraph
 
 from verifin.benchmark.metrics import (
+    answer_relevancy,
     exact_match,
+    faithfulness,
     ground_truth_in_text,
     tool_families,
     tool_f1,
@@ -387,6 +389,39 @@ class BenchmarkRunner:
         answer = str(answers[-1]["content"]) if answers else ""
         ground_truth = str(sample["ground_truth"])
 
+        # RAGAs 风格生成质量指标（规则近似）：
+        # faithfulness 的证据池 = 通过四要素校验的 chunk 文本 + PoT 计算产物
+        # （与验证闭环绑定，而非任意检索结果）
+        calc = final.get("calculation_result") or {}
+        calc_pool = []
+        if isinstance(calc, dict):
+            for key, unit_key in (
+                ("value", "unit"), ("fraction", None), ("difference", "difference_unit"),
+            ):
+                if calc.get(key) is not None:
+                    calc_pool.append((float(calc[key]), calc.get(unit_key)))
+            for alternate in calc.get("alternates") or []:
+                if not isinstance(alternate, dict):
+                    continue
+                if alternate.get("fraction") is not None:
+                    calc_pool.append((float(alternate["fraction"]), None))
+                if alternate.get("difference") is not None:
+                    calc_pool.append(
+                        (float(alternate["difference"]), alternate.get("difference_unit"))
+                    )
+        passed_ids = {
+            str(result.get("chunk_id"))
+            for flags in (final.get("verify_flags") or {}).values()
+            if isinstance(flags, dict)
+            for result in flags.get("results") or []
+            if isinstance(result, dict) and result.get("passed") and result.get("chunk_id")
+        }
+        evidence_texts = [
+            str(doc.get("content") or "")
+            for doc in docs
+            if str(doc.get("chunk_id")) in passed_ids
+        ]
+
         result = {
             "query": query,
             "conversation_id": conversation_id,
@@ -396,6 +431,8 @@ class BenchmarkRunner:
             "gold_answer_type": sample.get("gold_answer_type") or "unknown",
             "is_correct": exact_match(answer_candidates, ground_truth),
             "tool_f1": tool_f1(families_used, _pseudo_gold_families(query)),
+            "faithfulness": faithfulness(answer, evidence_texts, calc_pool),
+            "answer_relevancy": answer_relevancy(query, answer),
             "trajectory": extract_trajectory(
                 final, tools_used, families_used, retrieved_count,
                 gt_in_retrieved, verifier_enabled=bool(self.config.get("verifier", True)),

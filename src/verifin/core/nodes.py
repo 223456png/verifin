@@ -132,6 +132,13 @@ def _detect_calculation(query: str) -> Optional[dict]:
         "base_period": spec.base_period,
         "target_period": spec.target_period,
         "reversed": spec.reversed,
+        # Phase 9.7 实体键控模板透传（跨实体差值 / argmax 接力）；
+        # argmax 的主指标由检测正则给出（claim 词典归一可能取到第二指标）
+        "metric": spec.metric,
+        "entity_a": spec.entity_a,
+        "entity_b": spec.entity_b,
+        "entities": list(spec.entities),
+        "second_metric": spec.second_metric,
     }
 
 
@@ -163,11 +170,47 @@ def planner_node(state: Any) -> dict:
 
     calc_spec = _detect_calculation(query)
     if calc_spec is not None:
-        calc_spec["metric"] = claim.get("metric")
+        # 检测正则给出的主指标（argmax）优先，其余用 claim 词典归一结果
+        calc_spec["metric"] = calc_spec.get("metric") or claim.get("metric")
         calc_spec["entity"] = claim.get("entity")
 
     claims: Dict[str, dict] = {query: claim}
-    if calc_spec is not None:
+    if calc_spec is not None and calc_spec.get("kind") == "cross_entity_diff":
+        # Phase 9.7 跨实体差值流：两侧实体各一个携带四要素的检索子任务
+        year = calc_spec.get("base_period") or claim.get("period")
+        claim_a = {
+            **claim,
+            "entity": calc_spec.get("entity_a") or claim.get("entity"),
+            "period": year,
+        }
+        claim_b = {**claim, "entity": calc_spec.get("entity_b"), "period": year}
+        task_a = build_retrieval_query(claim_a, dialog)
+        task_b = build_retrieval_query(claim_b, dialog)
+        sub_tasks = [task_a, task_b]
+        claims[task_a] = dict(claim_a)
+        claims[task_b] = dict(claim_b)
+    elif calc_spec is not None and calc_spec.get("kind") == "argmax_relay":
+        # Phase 9.7 argmax 接力流：各实体的主指标子任务 + 第二指标子任务
+        # （胜者规划期未知 → 第二指标按指标+期间检索，全部候选实体的
+        # 第二指标 chunk 一并召回，由 calculator 比较后择胜者）
+        year = calc_spec.get("base_period") or claim.get("period")
+        sub_tasks = []
+        for entity in calc_spec.get("entities") or []:
+            entity_claim = {
+                **claim, "entity": entity, "period": year,
+                "metric": calc_spec.get("metric") or claim.get("metric"),
+            }
+            task = build_retrieval_query(entity_claim, dialog)
+            sub_tasks.append(task)
+            claims[task] = dict(entity_claim)
+        second_claim = {
+            **claim, "entity": None, "period": year,
+            "metric": calc_spec.get("second_metric") or claim.get("metric"),
+        }
+        second_task = build_retrieval_query(second_claim, dialog)
+        sub_tasks.append(second_task)
+        claims[second_task] = dict(second_claim)
+    elif calc_spec is not None:
         # 计算流：基期/比较期各一个携带四要素的检索子任务；
         # 实体/指标缺失时（真实数据全小写问题）原问题先入队兜底检索
         base_claim = {**claim, "period": calc_spec["base_period"]}
@@ -211,6 +254,58 @@ def planner_node(state: Any) -> dict:
         calculation_result={},
         next_step="retriever",
     )
+
+
+def make_planner_node(llm_planner=None):
+    """构造 planner 节点工厂：注入 LLM 规划器（可降级）。
+
+    ``llm_planner`` 需提供 ``available`` 属性与 ``plan(query, history) -> Optional[dict]``
+    方法（见 :class:`verifin.core.llm_planner.LLMPlanner`）；None 或不可用时节点行为
+    与确定性规则 planner 完全一致。
+
+    合并策略（LLM 可用且输出合法时）：
+    - ``sub_tasks``：采用 LLM 的分解结果；
+    - ``claims``：规则 claim 优先（含 query 的可靠四要素），LLM 补充其余子任务；
+    - ``calculation_spec``：规则 detect_program 优先，LLM 仅补充规则未检测到的计算。
+    """
+    def _node(state: Any) -> dict:
+        if llm_planner is None or not getattr(llm_planner, "available", False):
+            return planner_node(state)
+
+        # 先跑规则 planner（保证偏好注入/calc 检测/兜底齐全），再用 LLM 增强分解
+        result = planner_node(state)
+        s = _as_dict(state)
+        query = _latest_user_query(s)
+        history = _user_messages(s)[:-1]
+
+        llm_plan = None
+        try:
+            llm_plan = llm_planner.plan(query, history)
+        except Exception as exc:  # noqa: BLE001 - provider 异常降级
+            logger.warning("LLM 规划异常，降级规则 planner: {}", exc)
+            llm_plan = None
+
+        if not llm_plan or not llm_plan.get("sub_tasks"):
+            return result
+
+        merged_claims = dict(result.get("claims") or {})
+        for task in llm_plan["sub_tasks"]:
+            if task in merged_claims:
+                continue
+            tc = llm_plan.get("claims", {}).get(task)
+            merged_claims[task] = (
+                dict(tc) if isinstance(tc, dict) else dict(extract_claim(task))
+            )
+
+        result["sub_tasks"] = llm_plan["sub_tasks"]
+        result["claims"] = merged_claims
+        if llm_plan.get("calculation_spec") and not result.get("calculation_spec"):
+            result["calculation_spec"] = llm_plan["calculation_spec"]
+            result["calculation_requested"] = True
+
+        return result
+
+    return _node
 
 
 def _coerce_docs(output: Any) -> List[dict]:
@@ -394,18 +489,143 @@ def _scan_years_in_docs(docs: List[dict], base_year: str, target_year: str):
     return base_hit, target_hit
 
 
+def _entity_keyed_candidates(s: dict, program_spec) -> Dict[str, list]:
+    """实体键控候选收集（Phase 9.7：跨实体差值 / argmax 接力计算流）。
+
+    返回 ``{entity: [ValueCandidate]}``；argmax_relay 额外含
+    ``"second::<entity>"`` 桶（胜者第二指标接力查找，键与
+    :meth:`ProgramExecutor._execute_argmax_relay` 约定一致）。
+
+    收集顺序（桶内按 anchor_score 升序取优）：
+    1. 四要素校验通过的证据（claim 实体 + 指标双匹配；新闻来源 +0.5 惩罚）；
+    2. 检索文档的实体锚定扫描（实体提及 + 指标同义词 + 年份三信号最近邻）；
+    3. small-to-big 父文档补全（表格数值块 BM25 信号弱，按问题实词 ×
+       已检索 chunk 重叠度排序补全，+0.25 来源惩罚）。
+    """
+    from verifin.tools.evidence import EvidenceExtractor
+    from verifin.tools.program_executor import ValueCandidate
+
+    if program_spec.kind == "cross_entity_diff":
+        entities = [program_spec.entity_a, program_spec.entity_b]
+        metric_pairs = [(program_spec.metric, "")]
+    else:
+        entities = list(program_spec.entities)
+        metric_pairs = [
+            (program_spec.metric, ""),
+            (program_spec.second_metric, "second::"),
+        ]
+    year = program_spec.base_period or None
+    query_text = _latest_user_query(s)
+
+    candidates: Dict[str, List[ValueCandidate]] = {}
+
+    def _add(prefix: str, entity: str, item: dict, chunk_id, anchor: float) -> None:
+        key = f"{prefix}{entity}" if prefix else entity
+        bucket = candidates.setdefault(key, [])
+        if any(c.value == item["value"] and c.unit == item["unit"] for c in bucket):
+            return
+        bucket.append(ValueCandidate(
+            value=item["value"],
+            unit=item.get("unit"),
+            period=item.get("period") or year,
+            chunk_id=chunk_id,
+            anchor_score=anchor,
+        ))
+
+    # 1. 校验通过证据（claim 实体 × 指标匹配）
+    source_types: Dict[str, str] = {}
+    docs = [d for d in (s.get("retrieved_docs") or []) if isinstance(d, dict)]
+    for doc in docs:
+        meta = doc.get("metadata") if isinstance(doc.get("metadata"), dict) else {}
+        if meta.get("source_type"):
+            source_types[str(doc.get("chunk_id"))] = str(meta["source_type"])
+    entity_lookup = {str(e).lower(): e for e in entities if e}
+    for flag in (s.get("verify_flags") or {}).values():
+        if not isinstance(flag, dict):
+            continue
+        flag_claim = flag.get("claim") if isinstance(flag.get("claim"), dict) else {}
+        claim_entity = str(flag_claim.get("entity") or "").lower()
+        entity = entity_lookup.get(claim_entity)
+        if entity is None:
+            continue
+        for metric, prefix in metric_pairs:
+            if not metric or flag_claim.get("metric") != metric:
+                continue
+            for result in flag.get("results") or []:
+                if not (
+                    isinstance(result, dict)
+                    and result.get("passed")
+                    and result.get("value") is not None
+                ):
+                    continue
+                if year and str(year) not in str(result.get("period") or ""):
+                    continue
+                source_penalty = (
+                    0.5 if source_types.get(str(result.get("chunk_id"))) == "news" else 0.0
+                )
+                _add(
+                    prefix, entity,
+                    {"value": float(result["value"]), "unit": result.get("unit")},
+                    result.get("chunk_id"), 1.0 + source_penalty,
+                )
+
+    # 2. 检索文档实体锚定扫描
+    def _scan(content: str, chunk_id, penalty: float = 0.0) -> None:
+        for entity in entities:
+            if not entity:
+                continue
+            for metric, prefix in metric_pairs:
+                if not metric:
+                    continue
+                for item in EvidenceExtractor.collect_entity_values(
+                    content, entity, year, spec_metric=metric
+                ):
+                    _add(prefix, entity, item, chunk_id,
+                         penalty + item.get("anchor_score", 1.0))
+
+    for doc in docs:
+        _scan(str(doc.get("content") or ""), doc.get("chunk_id"))
+
+    # 3. small-to-big 父文档补全（问题实词 × 已检索 chunk 重叠度排序）
+    doc_chunks: Dict[str, str] = {}
+    for doc in docs:
+        meta = doc.get("metadata") if isinstance(doc.get("metadata"), dict) else {}
+        doc_id = str(meta.get("doc_id") or "")
+        if doc_id:
+            doc_chunks[doc_id] = doc_chunks.get(doc_id, "") + " " + str(doc.get("content") or "")
+    query_tokens = EvidenceExtractor._content_tokens(query_text)
+    doc_ids = sorted(
+        doc_chunks,
+        key=lambda d: -len(EvidenceExtractor._content_tokens(doc_chunks[d]) & query_tokens),
+    )
+    for doc_id in doc_ids[:10]:
+        expanded = _call_tool("expand_document", doc_id=doc_id)
+        if not isinstance(expanded, list):
+            continue  # 工具未注册（如单元测试）→ 跳过
+        for chunk in expanded:
+            if isinstance(chunk, dict):
+                _scan(
+                    str(chunk.get("content") or ""),
+                    chunk.get("chunk_id"),
+                    penalty=0.25,
+                )
+    return candidates
+
+
 def calculator_node(state: Any) -> dict:
     """数值计算节点（Phase 8 接入主循环，Phase 9 升级为程序执行器）。
 
-    流程（Phase 9）：
-    1. **候选收集**：四要素校验通过的证据值（高置信，``anchor_score=0``）
-       + 检索文档的年份锚定多候选扫描（每年每文档 ≤3，按到年份提及的
-       字符距离排序）；
-    2. **程序执行**：:class:`ProgramExecutor` 枚举基期×比较期组合（≤9），
-       单位归一（million/% 不跨量纲）+ 合理性剪枝（|增长率| ≤ 2000%），
-       经 ``calc_expression``（PoT 安全求值，走 ToolRegistry 保留 calc
-       工具族调用轨迹）得出 primary + ≤2 个 alternates 的多刻度答案
-       （difference / fraction / percentage，对齐 FinQA 裸数值 GT）；
+    流程（Phase 9 / 9.7）：
+    1. **候选收集**：
+       - 年份键控（growth_pct / difference）：四要素校验通过的证据值
+         （高置信，``anchor_score=0``）+ 检索文档的年份锚定多候选扫描；
+       - 实体键控（cross_entity_diff / argmax_relay）：校验证据 +
+         实体锚定扫描（实体提及 + 指标同义词 + 年份三信号最近邻）；
+    2. **程序执行**：:class:`ProgramExecutor` 枚举组合（≤16），单位归一
+       （million/% 不跨量纲）+ 合理性剪枝，经 ``calc_expression``（PoT
+       安全求值，走 ToolRegistry 保留 calc 工具族调用轨迹）得出 primary
+       + ≤2 个 alternates 的多刻度答案（difference / fraction /
+       percentage，对齐 FinQA 裸数值 GT）；
     3. 降级：无可用组合 → calculation_result 记 error，synthesizer 输出诊断。
     """
     from verifin.tools.evidence import EvidenceExtractor
@@ -425,7 +645,33 @@ def calculator_node(state: Any) -> dict:
         metric=spec_metric,
         entity=spec.get("entity"),
         reversed=bool(spec.get("reversed")),
+        entity_a=spec.get("entity_a"),
+        entity_b=spec.get("entity_b"),
+        entities=list(spec.get("entities") or []),
+        second_metric=spec.get("second_metric"),
     )
+
+    def _registry_evaluator(expression: str) -> dict:
+        out = _call_tool("calc_expression", expr=expression)
+        if isinstance(out, dict):
+            return out
+        # 工具未注册 → 领域直接回退（节点可独立运行与单测）
+        from verifin.tools.calculator import calc_expression
+
+        return calc_expression(expression)
+
+    # Phase 9.7：实体键控模板（跨实体差值 / argmax 接力）走独立候选路径
+    if program_spec.kind in ("cross_entity_diff", "argmax_relay"):
+        candidates = _entity_keyed_candidates(s, program_spec)
+        program = ProgramExecutor(evaluator=_registry_evaluator).execute(
+            program_spec, candidates
+        )
+        return _hook(
+            s, "calculator", None,
+            hook_extra={"expression": program.expression} if program.expression else None,
+            calculation_result=program.to_dict(),
+            next_step="synthesizer",
+        )
 
     # 1a. 校验通过证据 → 候选（指标匹配的 flag 优先）
     candidates: Dict[str, List[ValueCandidate]] = {}
@@ -561,15 +807,6 @@ def calculator_node(state: Any) -> dict:
                     )
 
     # 3. 程序执行（PoT 求值经 ToolRegistry，保留 calc 工具族轨迹）
-    def _registry_evaluator(expression: str) -> dict:
-        out = _call_tool("calc_expression", expr=expression)
-        if isinstance(out, dict):
-            return out
-        # 工具未注册 → 领域直接回退（节点可独立运行与单测）
-        from verifin.tools.calculator import calc_expression
-
-        return calc_expression(expression)
-
     program = ProgramExecutor(evaluator=_registry_evaluator).execute(
         program_spec, candidates
     )

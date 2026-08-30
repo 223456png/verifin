@@ -3,6 +3,7 @@
 领域 Tool（tools/）不 import LangGraph；本包是唯一允许依赖 LangGraph 的编排层。
 """
 
+from verifin.core.llm_planner import LLMPlanner
 from verifin.core.state import AgentState
 
-__all__ = ["AgentState"]
+__all__ = ["AgentState", "LLMPlanner"]

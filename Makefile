@@ -3,7 +3,7 @@ PY := .venv/bin/python
 PIP := .venv/bin/pip
 PORT ?= 8000
 
-.PHONY: help install demo test benchmark ablation index multi-turn clean
+.PHONY: help install demo test benchmark ablation index multi-turn multihop multihop-synth clean
 
 help: ## 显示所有可用命令
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -21,7 +21,7 @@ demo-finqa: ## 用 FinQA 索引启动（需先 make index）
 	@echo ">>> 启动 VeriFin（FinQA 索引）: http://127.0.0.1:$(PORT)"
 	VERIFIN_INDEX_DIR=./indexes $(PY) -m verifin.api.app
 
-test: ## 运行全部测试（126 项）
+test: ## 运行全部测试（156 项）
 	$(PY) -m pytest tests/ -q
 
 index: ## 构建 FinQA 索引（data/finqa → indexes/）
@@ -35,6 +35,12 @@ ablation: ## 消融实验（合成套件，5 配置 × 20 样本）
 
 multi-turn: ## ConvFinQA 多轮评测
 	$(PY) scripts/run_benchmark.py --dataset convfinqa --multi-turn --output ./results
+
+multihop: ## 多跳合成基准评测（16 样本：种子抽取 + 四重校验产出）
+	$(PY) scripts/run_benchmark.py --dataset synthetic_multihop --output ./results/multihop_check
+
+multihop-synth: ## 多跳 QA 合成管线（产出基准 JSON + 校验统计）
+	$(PY) scripts/synthesize_multihop.py --output ./results/multihop_synth
 
 clean: ## 清理运行期产物（索引/缓存）
 	rm -rf .verifin_api_env chroma_db indexes verifin_metadata.db .pytest_cache

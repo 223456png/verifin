@@ -77,6 +77,7 @@ class ReportGenerator:
             full, no_verifier, no_replanner, no_preferences, no_dense, summary
         ))
         lines.extend(self._section_behavior(full))
+        lines.extend(self._section_generation_quality(full))
         lines.extend(self._section_errors(full))
         lines.extend(self._section_honesty(summary))
         return "\n".join(lines)
@@ -266,6 +267,25 @@ class ReportGenerator:
         if value is None:
             return "N/A"
         return "达标 ✓" if value <= 4 else "未达标 ✗"
+
+    def _section_generation_quality(self, full: dict) -> list:
+        """RAGAs 风格生成质量指标（规则近似）：让数字说行业标准语言。"""
+        return [
+            "## 生成质量指标（RAGAs 风格・规则近似）",
+            "",
+            "| 指标 | 实测 | 口径 |",
+            "|------|------|------|",
+            f"| Faithfulness | {_pct(full.get('faithfulness'))} "
+            "| 答案数值声明被「通过四要素校验的证据 ∪ PoT 计算产物」支持的比例 |",
+            f"| Answer Relevancy | {_pct(full.get('answer_relevancy'))} "
+            "| 问题内容词（去停用词 + 数值 token）在答案中的覆盖率 |",
+            "",
+            "说明：两指标为 RAGAs 同名指标的**确定性规则近似**（非 LLM-as-judge），",
+            "优点是零外部依赖、可复现、可进 CI；与 LLM 评测的相关性未标定，",
+            "适用于跨配置相对比较（消融表中各配置同口径计算），不宜与 LLM 评测",
+            "绝对值直接对标（诚实边界）。",
+            "",
+        ]
 
     def _section_errors(self, full: dict) -> list:
         counts = full.get("error_counts") or {}

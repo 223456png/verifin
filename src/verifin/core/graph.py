@@ -13,7 +13,7 @@ from langgraph.graph import END, StateGraph
 
 from verifin.core.nodes import (
     calculator_node,
-    planner_node,
+    make_planner_node,
     replanner_node,
     retriever_node,
     synthesizer_node,
@@ -54,11 +54,16 @@ def route_after_replanner(state: Any) -> str:
     return "retriever" if next_step == "retriever" else "end"
 
 
-def build_agent_graph():
-    """构建并编译 ReAct Agent 图（带内存 checkpoint）。"""
+def build_agent_graph(llm_planner=None):
+    """构建并编译 ReAct Agent 图（带内存 checkpoint）。
+
+    Args:
+        llm_planner: 可插拔 LLM 规划器（见 ``verifin.core.llm_planner.LLMPlanner``）；
+            None 时 planner 走确定性规则（默认，零外部依赖）。
+    """
     builder = StateGraph(AgentState)
 
-    builder.add_node("planner", planner_node)
+    builder.add_node("planner", make_planner_node(llm_planner))
     builder.add_node("retriever", retriever_node)
     builder.add_node("verifier", verifier_node)
     builder.add_node("replanner", replanner_node)
