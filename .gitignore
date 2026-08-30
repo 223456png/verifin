@@ -14,7 +14,8 @@ verifin_metadata.db
 bge_env/
 
 # 实验产出（Phase 7 benchmark 原始数据与报告，可再生）
-results/
+results/*
+!results/resume_numbers.md
 
 # 数据（真实数据集不入库，仅保留样例）
 data/*
