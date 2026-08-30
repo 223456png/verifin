@@ -11,6 +11,7 @@ chroma_db/
 verifin_metadata.db
 *.db
 .verifin_api_env/
+bge_env/
 
 # 实验产出（Phase 7 benchmark 原始数据与报告，可再生）
 results/

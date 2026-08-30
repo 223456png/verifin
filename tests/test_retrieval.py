@@ -1,8 +1,10 @@
 """Phase 2 — Hybrid Retrieval + Rerank 规格测试。
 
-离线环境事实：sentence-transformers 未安装 → Reranker 走降级透传路径；
+Reranker 单测统一走**降级透传**路径（mock ``_load_model`` 失败），避免在
+单测中加载 200MB cross-encoder 模型；真实 bge/rerank 的召回提升由
+benchmark（真实数据集消融）验证，见 scripts/run_benchmark.py。
 hash-dense 为词法级信号，召回对比断言采用「∀query hybrid ≥ bm25 且 ∃query 严格 >」
-（设计 Decisions #7 的可辩护形态），严格整体提升将在 bge 模式下（Phase 7）验证。
+（设计 Decisions #7 的可辩护形态）。
 
 召回语料构造原理（设计 Decisions #8）：
 - GT 文档「短而精确」：hash-dense 的 L2 归一使其余弦相似度占优；
@@ -110,10 +112,10 @@ def test_rrf_fusion() -> None:
 
 # 8.2 检查 Reranker 可用状态 → 降级透传行为正确
 def test_reranker_available() -> None:
-    reranker = Reranker(model_name="__unavailable_for_test__")
+    reranker = Reranker()
     assert reranker.available is False  # 懒加载：未触发加载前必然不可用
+    # conftest 全局夹具已 mock _load_model 失败 → 降级透传原序零分
     out = reranker.rerank("q", [("a", "text a"), ("b", "text b")], top_k=2)
-    # 降级契约：保持候选原序、零分透传（有/无 st 环境行为一致）
     assert [cid for cid, _ in out] == ["a", "b"]
     assert all(score == 0.0 for _, score in out)
 
@@ -179,7 +181,7 @@ def test_metadata_filter(hybrid_fixture) -> None:
 # 8.6 工具函数 retrieve() → 返回 SearchResultSet
 def test_retriever_tool(hybrid_fixture) -> None:
     set_retriever(hybrid_fixture["hybrid"])
-    result = retrieve("revenue", top_k=2)
+    result = retrieve("revenue", top_k=2, use_reranker=False)
     assert isinstance(result, SearchResultSet)
     assert len(result.results) == 2
     assert get_retriever() is hybrid_fixture["hybrid"]

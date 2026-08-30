@@ -28,7 +28,7 @@ VeriFin 的答案：**以证据校验为中心的 Agent 循环** —— 检索 �
 ## 核心特性
 
 - **LangGraph 状态机编排**：planner → retriever → verifier → calculator → replanner → reporter 六节点循环，checkpoint 持久化多轮会话；领域逻辑（校验/计算/仲裁）全部为无状态 Tool，与框架解耦、可独立单测
-- **混合检索 + 多查询合并**：BM25 + Dense 双路召回，多子任务检索结果按 chunk_id 去重合并（保留原始问题的强词法信号）；small-to-big 父文档补全，解决表格数值块 BM25 信号弱的问题
+- **混合检索 + 多查询合并**：BM25 + Dense 双路召回（可插拔 embedding：离线 hash / 语义 bge-small），多子任务检索结果按 chunk_id 去重合并（保留原始问题的强词法信号）；small-to-big 父文档补全，解决表格数值块 BM25 信号弱的问题
 - **四要素校验器**：实体词边界匹配、期间年份交集、指标词典同义词归一、口径 token 重叠率——全部规则化、零 LLM 依赖、确定性可测
 - **冲突仲裁与重规划**：≤2% 数值差异融合均值，>5% 强制 Replan；来源信任度加权（年报申报 > 新闻稿 > 研报）；Replan 按失败原因（缺年份 / 缺指标 / 缺实体）重构查询
 - **PoT 安全计算器 + 程序模板执行器**：`calc_expression` AST 白名单沙箱求值（禁任意代码 / 禁 IO）；FinQA 推导型问题（占 93%）经模板检测 → 候选数值枚举 → 单位归一 → 锚分剪枝 → 确定性求值
@@ -119,6 +119,17 @@ VeriFin 的答案：**以证据校验为中心的 Agent 循环** —— 检索 �
 | 重规划有效率 | 45.7% | ≥ 60% |
 | 平均轨迹步数 | 7.65 | ≤ 4 |
 
+### 检索升级（单查询直接检索口径，100 样本）
+
+| 配置 | doc recall@20 |
+|---|---|
+| hash + hybrid | 81.0% |
+| **bge + hybrid** | **86.0%（+5.0 pp）** |
+| bge + hybrid + rerank | 85.0%（-1.0 pp，通用精排对金融表格无益） |
+
+> 语义 embedding（bge-small-en-v1.5）替换无语义哈希向量带来明确提升；通用
+> cross-encoder rerank 在此口径无益，属诚实边界。复现：`scripts/compare_retrieval.py`。
+
 完整报告见 `results/finqa_v8/report.md`、`results/convfinqa_check/report.md`、`results/synth_check3/report.md`（含错误分析与诚实声明）。
 
 ---
@@ -149,8 +160,14 @@ python -m verifin.api.app
 # 1. 准备数据（FinQA 数据集放入 data/finqa/）
 #    https://github.com/czyssrs/FinQA
 
-# 2. 构建索引
+# 2. 构建索引（默认 hash，离线零依赖）
 python scripts/build_index.py --dataset finqa --data-dir ./data/finqa
+
+# 2b. 构建语义索引（bge-small，需 `[bge]` 依赖 + 模型权重，doc recall +5 pp）
+# pip install -e ".[bge]"                 # 安装 sentence-transformers
+# HF_ENDPOINT=https://hf-mirror.com \     # 国内网络可走镜像首次下载
+#   python scripts/build_index.py --dataset finqa --data-dir ./data/finqa \
+#     --embedding bge --persist-dir ./bge_env
 
 # 3. 运行评测
 python scripts/run_benchmark.py --dataset finqa --max-samples 100 --output ./results
@@ -210,7 +227,8 @@ src/verifin/
 ## Roadmap
 
 - [ ] **Phase 10**：LLM program 生成（table_sum / exp_avg / 多步 add 链），覆盖 FinQA 剩余 75% 推导型
-- [ ] 真实语义 embedding（bge-small-en-v1.5，接口已留）替换 hash-Dense
+- [x] 真实语义 embedding（bge-small-en-v1.5）替换 hash-Dense（doc recall +5 pp）
+- [ ] 金融域专用 rerank（通用 ms-marco 对数值表格无益，需财务语料微调）
 - [ ] TAT-QA 数据集评测（跨表推理）
 - [ ] 重规划策略优化（当前 45.7% 有效率 → 目标 60%+）
 
