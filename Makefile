@@ -3,7 +3,7 @@ PY := .venv/bin/python
 PIP := .venv/bin/pip
 PORT ?= 8000
 
-.PHONY: help install demo test benchmark ablation index multi-turn multihop multihop-synth clean
+.PHONY: help install demo test benchmark benchmark-finqa ablation index multi-turn multihop multihop-synth clean
 
 help: ## 显示所有可用命令
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -21,14 +21,24 @@ demo-finqa: ## 用 FinQA 索引启动（需先 make index）
 	@echo ">>> 启动 VeriFin（FinQA 索引）: http://127.0.0.1:$(PORT)"
 	VERIFIN_INDEX_DIR=./indexes $(PY) -m verifin.api.app
 
-test: ## 运行全部测试（156 项）
+test: ## 运行全部测试（184 项）
 	$(PY) -m pytest tests/ -q
 
 index: ## 构建 FinQA 索引（data/finqa → indexes/）
 	$(PY) scripts/build_index.py --dataset finqa --data-dir ./data/finqa
 
-benchmark: ## FinQA 端到端评测（100 样本）
+benchmark: ## FinQA 端到端评测（100 样本，hash 索引离线保底）
 	$(PY) scripts/run_benchmark.py --dataset finqa --max-samples 100 --output ./results
+
+benchmark-finqa: ## FinQA 端到端评测（bge 索引，doc recall 最优路径）
+# 需先构建 bge 索引（见 scripts/compare_retrieval.py 头部文档）：
+#   HF_ENDPOINT=https://hf-mirror.com $(PY) scripts/build_index.py \
+#     --dataset finqa --data-dir ./data/finqa --embedding bge --persist-dir ./bge_env
+# 查询侧需 sentence-transformers 模型缓存；沙箱环境重置后首次运行用
+# HF_ENDPOINT=https://hf-mirror.com make benchmark-finqa 重新拉取。
+	HF_HUB_OFFLINE=1 $(PY) scripts/run_benchmark.py --dataset finqa \
+		--data-dir ./data/finqa --max-samples 100 --index-dir ./bge_env \
+		--output ./results
 
 ablation: ## 消融实验（合成套件，5 配置 × 20 样本）
 	$(PY) scripts/run_benchmark.py --dataset synthetic --ablation --multi-turn --max-samples 20 --output ./results

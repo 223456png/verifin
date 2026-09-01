@@ -27,6 +27,15 @@ from verifin.tools.unit_parser import normalize_to_base
 _YEAR_IN_PERIOD_RE = re.compile(r"20\d{2}")
 _DEFINITION_OVERLAP_THRESHOLD = 0.5
 
+
+def _is_table_content(content: str) -> bool:
+    """表格 chunk 判定（Phase 11）：markdown 管道行 ≥2 视为表格。
+
+    表格行标签（"revenue | 5829"）无散文四要素文本，四要素校验失败是
+    结构性的而非 chunk 无关——据此标记供排除豁免。
+    """
+    return sum(1 for line in content.splitlines() if line.strip().startswith("|")) >= 2
+
 # ---- Phase 5: 多文档冲突仲裁 ----
 _CONFLICT_ROUNDING = 0.02   # ≤2%：四舍五入误差 → 融合均值
 _CONFLICT_MAJOR = 0.05      # >5%：强制 Replan（合并报表口径）
@@ -405,6 +414,10 @@ def verify_claim_batch(
         result_dict["unit"] = evidence.unit
         result_dict["period"] = evidence.period
         result_dict["source_type"] = metadata.get("source_type", "unknown")
+        # Phase 11：表格 chunk 标记（markdown 管道行 ≥2）——四要素校验对表格
+        # 天然过严（行标签无散文四要素文本），下游据此豁免排除（见
+        # FailureMemoryStore.get_failed_chunk_ids），防 gold 表格被永久拉黑
+        result_dict["is_table"] = _is_table_content(str(chunk.get("content") or ""))
 
     passed_items = [item for item in result_dicts if item.get("passed")]
     conflict = resolve_conflicts(passed_items, preferences)

@@ -1,17 +1,19 @@
-# VeriFin — 简历数字（Phase 10 收官，2026-08-30）
+# VeriFin — 简历数字（Phase 11 收官，2026-08-31）
 
 > 本文件是从评测报告（results/synth_check4、results/finqa_v8、results/finqa_v10、
-> results/finqa_v10_1、results/convfinqa_check、results/multihop_check）提炼的面试/简历可引用数字与
+> results/finqa_v10_1、results/finqa_v11、results/convfinqa_check、
+> results/multihop_check）提炼的面试/简历可引用数字与
 > 诚实边界说明。所有数字均可回溯到对应报告文件。
 
 ## 一句话定位
 
 LangGraph 多智能体金融证据校验 RAG 系统：BM25+Dense 混合检索（多查询合并 +
-small-to-big 父文档补全）、四要素规则校验、冲突仲裁与重规划、会话偏好记忆、
+small-to-big 父文档补全）、四要素规则校验（表格 chunk 豁免与排除语义修正）、
+冲突仲裁与重规划（带失败记忆与原地打转终止）、会话偏好记忆、
 PoT 安全计算器 + 程序模板执行器（五类模板）+ FinQA DSL 多步执行器与可插拔
 LLM 程序生成（失败降级）；检索升级（语义 embedding 替换哈希向量）、可插拔
 LLM 规划层（失败降级规则 planner）、多跳 QA 合成管线（四重校验）与
-181 项测试全绿，完成真实 FinQA / ConvFinQA 评测并提供 FastAPI 服务层与 Web Demo。
+184 项测试全绿，完成真实 FinQA / ConvFinQA 评测并提供 FastAPI 服务层与 Web Demo。
 
 ## 可引用数字
 
@@ -20,14 +22,18 @@ LLM 规划层（失败降级规则 planner）、多跳 QA 合成管线（四重�
 2. **消融贡献（合成套件，多轮口径）**：Verifier **+20 pp**（100% vs 80%）、
    Replanner **+15 pp**（100% vs 85%）、偏好记忆 **+15 pp**（多轮子集 100% vs 40%）
 3. **真实 FinQA test（1,147 题，评测 100 样本）**：
-   - 答案 EM **1.0% → 6.0% → 7.0%（7 倍，Phase 10）**；PoT 计算子集规模
+   - 答案 EM **1.0% → 6.0% → 7.0% → 8.0%（8 倍，Phase 11）**；PoT 计算子集规模
      25 → **38 题**（ratio 模板 +13），模板可检测子集 EM 24% → 18.4%
-     （子集扩容稀释，绝对正确数 6 → 7）
-   - 文档级召回 recall@20：**48% → 56%**（多子任务检索合并 + top_k 25）
+     （子集扩容稀释，绝对正确数 6 → 7 → 8）
+   - 文档级召回：**48% → 56% → 88.0%（Phase 11，+32 pp）**——损耗归因
+     （44 失败样本逐个跑图追踪）发现 59% 是"四要素校验失败 chunk 被永久
+     拉黑后从证据池驱逐"的状态管理损耗而非检索能力不足（检索层本身
+     88%，子任务合并口径）；修复 = 排除只防新检索重复命中、不驱逐历史
+     证据 + 表格 chunk 豁免 + replanner 原地打转终止 + 端到端切 bge 索引
 4. **真实 ConvFinQA dev 多轮（100 轮）**：文档级召回 **52% → 65%（+13 pp）**，
    多轮继承/偏好机制端到端跑通
-5. **工程指标（真实数据，Phase 10）**：Tool F1 94.8%、平均轨迹步数 7.57、
-   重规划有效率 50%（pseudo-gold 触发词补齐比率类后的新口径）
+5. **工程指标（真实数据，Phase 11）**：Tool F1 95.0%、平均轨迹步数 6.67、
+   重规划有效率 3%（打转终止后重规划更保守，失败样本提前退出）
 6. **检索升级（单查询直接检索口径，FinQA test 100 样本）**：语义 embedding
    bge-small 替换无语义 hash 向量，doc recall@20 **81.0% → 86.0%（+5.0 pp）**；
    cross-encoder rerank 在此口径下 **-1.0 pp**（通用精排对金融表格 doc 召回无益，
@@ -37,9 +43,10 @@ LLM 规划层（失败降级规则 planner）、多跳 QA 合成管线（四重�
    证据 ≠ 算得出答案"的实证），新增实体键控程序模板后三类子集全对；
    Faithfulness 100%、Tool F1 100%。诚实边界：基准由本项目合成管线产出，
    问题形态与模板同源
-8. **测试资产**：181 项全绿（含程序执行器五模板 / DSL 多步执行器 / LLM 程序
+8. **测试资产**：184 项全绿（含程序执行器五模板 / DSL 多步执行器 / LLM 程序
    生成降级语义 / 表格解析 / 检索合并 / LLM 规划层 / 多跳合成四重校验 /
-   实体锚定与短语锚定扫描回归 / Phase 10.1 年份 token 与 thereafter 锚定）
+   实体锚定与短语锚定扫描回归 / Phase 10.1 年份 token 与 thereafter 锚定 /
+   Phase 11 表格豁免与打转终止语义）
 
 ## Phase 9 关键工程改动（面试可展开）
 
@@ -145,6 +152,34 @@ LLM 规划层（失败降级规则 planner）、多跳 QA 合成管线（四重�
    13 道 ratio 题答案全部按新锚定改变、EM 7.0% 持平零回归——上界瓶颈
    从锚定层转移到检索层。复现：`scripts/verify_ratio_ideal.py`。
 
+## Phase 11 检索召回修复（面试可展开）
+
+1. **损耗归因先行（不盲改检索）**：外部建议全部指向检索层调优（query
+   改写/滑窗/RRF 调参），但归因诊断推翻了这个前提——检索层本身
+   doc recall@25 达 **88%**（bge 子任务合并口径，`scripts/diagnose_recall.py`
+   六组对照），端到端终态却只有 56%。对 44 个失败样本**逐个跑图追踪**
+   （`scripts/trace_gold_loss.py`）：59% 是 LOSS-BY-EXCLUDE（gold chunk 被
+   四要素校验失败拉黑后**从累积证据池驱逐**）、27% 是真检索失败、14%
+   复跑已命中——32pp 损耗主要在图状态管理而非检索。
+2. **排除语义修正（核心修复）**：`exclude_chunk_ids` 原实现把失败 chunk
+   从 `retrieved_docs`（含历史轮已入池证据）整体移除；但 verifier 对每个
+   子任务按**各自 claim** 重新校验全部 docs——chunk 在子任务 A 失败不代表
+   在细化后的子任务 B 下无价值。修正为：排除**只过滤本轮新检索结果**
+   （不在失败方向上重复检索），**不驱逐历史证据**（排除原意保留，
+   gold 驱逐止损）。
+3. **表格 chunk 豁免**：四要素校验对表格天然过严（行标签无散文实体/
+   期间文本），`verify_claim_batch` 富化 `is_table` 标记（markdown 管道行
+   ≥2），`get_failed_chunk_ids` 跳过表格条目——防 gold 表格被永久拉黑。
+4. **replanner 原地打转终止**：新子任务与既有 sub_tasks 文本相同（实测
+   失败样本连续生成 "retrieve revenue 2016 calculation method" ×2）视为
+   无新信号 → 终止路径（人性化诊断 + END），不追加不进检索循环。
+5. **端到端切 bge 索引**：Makefile `benchmark-finqa` 目标固化（hash 索引
+   保留为离线保底路径）。
+6. **验证闭环**：26 个 LOSS-BY-EXCLUDE 样本复跑 **23/25 转为 gold 命中
+   （92%）**；检索层零改动（git diff 正交性）；端到端复跑 doc recall
+   **56% → 88.0%**、EM **7.0% → 8.0%**（净 +2：43/72 新对；诚实披露
+   73 由对转错——更大证据池下 ratio 锚定选了不同操作数，60.8%→1536%）。
+
 ## 诚实边界（面试必答，已写入报告中）
 
 - Agent 默认路径为**无 LLM 的确定性规则引擎**。FinQA test 答案类型分解：
@@ -165,8 +200,14 @@ LLM 规划层（失败降级规则 planner）、多跳 QA 合成管线（四重�
   recall 81%→86%，+5 pp）；但通用 `ms-marco` cross-encoder rerank 对金融表格
   doc 召回无益（-1 pp）——通用段落精排与金融数值表格的语义分布不匹配，
   金融域专用 rerank 待做。
-- 真实大语料上整体 EM 仍低：检索（doc recall 56%）与 program 覆盖是两大瓶颈，
-  均已在报告中按口径分解如实披露。
+- 真实大语料上整体 EM 仍低：Phase 11 后 doc recall 88%，**program 覆盖成为
+  第一瓶颈**（推导型 93% 中确定性模板只覆盖 38%，table_sum/exp_avg/
+  多步链依赖 LLM 程序生成路径——无 API key 未全量评测）；检索残余 12%
+  失败中一半是无实体短查询（"what is the debt-to-asset ratio?"）的查询
+  理解问题，Phase 12 范畴。
+- **Phase 11 净账**：EM 7.0% → 8.0% 是净 +2/-1（43/72 新对、73 由对转错
+  ——更大证据池下 ratio 锚定选了不同操作数）；doc recall +32pp 的收益
+  尚未被 program 覆盖兑现，检索修复的红利会在后续 program 扩展中释放。
 
 ## 数字回溯索引
 
@@ -176,6 +217,7 @@ LLM 规划层（失败降级规则 planner）、多跳 QA 合成管线（四重�
 | FinQA EM 6.0%（Phase 9）/ det 24% / recall 56% | [results/finqa_v8/report.md](finqa_v8/report.md) |
 | FinQA EM 7.0%（Phase 10）/ PoT 子集 38 题 | [results/finqa_v10/report.md](finqa_v10/report.md) |
 | ratio 理想检索 2/13→7/13（Phase 10.1） | `scripts/verify_ratio_ideal.py` + [results/finqa_v10_1/report.md](finqa_v10_1/report.md) |
+| FinQA EM 8.0% / doc recall 88.0%（Phase 11） | [results/finqa_v11/report.md](finqa_v11/report.md) + `scripts/diagnose_recall.py` + `scripts/trace_gold_loss.py` |
 | ConvFinQA recall 65% | [results/convfinqa_check/report.md](convfinqa_check/report.md) |
 | 检索升级 recall 81%→86% | `scripts/compare_retrieval.py`（FinQA test 100 样本实测） |
 | 多跳基准 EM 37.5%→100% | [results/multihop_check/report.md](multihop_check/report.md) |

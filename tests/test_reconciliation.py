@@ -111,3 +111,18 @@ def test_agent_conflict_replan_integration() -> None:
         for flag in final["verify_flags"].values()
         if isinstance(flag, dict)
     )
+
+# Phase 11：verify_claim_batch 结果富化 is_table 标记（表格 chunk 豁免排除的数据源）
+def test_verify_batch_is_table_flag() -> None:
+    table_chunk = _chunk(
+        "| $ in millions | 2013 | 2014 |\n| revenue | 4286 | 5829 |\n| cost | 2500 | 3000 |",
+        "nova-table", "filing",
+    )
+    prose_chunk = _chunk(
+        "NovaTech revenue in 2024 was $12,400 million.", "nova-prose", "filing",
+    )
+    batch = verify_claim_batch(CLAIM, [table_chunk, prose_chunk])
+    flags_by_id = {result["chunk_id"]: result for result in batch["results"]}
+    # markdown 管道行 ≥2 → 表格 chunk；散文 chunk 为 False
+    assert flags_by_id["nova-table"]["is_table"] is True
+    assert flags_by_id["nova-prose"]["is_table"] is False

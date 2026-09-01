@@ -4,7 +4,7 @@
 >
 > A financial evidence-verification agent built on LangGraph: retrieval is just the input — the real output is a **verifiable, traceable Claim-Evidence binding**, with automatic replanning when evidence fails four-factor verification.
 
-[![tests](https://img.shields.io/badge/tests-162%20passed-brightgreen)]()
+[![tests](https://img.shields.io/badge/tests-184%20passed-brightgreen)]()
 [![python](https://img.shields.io/badge/python-3.10%2B-blue)]()
 [![license](https://img.shields.io/badge/license-MIT-lightgrey)]()
 
@@ -121,14 +121,16 @@ VeriFin 的答案：**以证据校验为中心的 Agent 循环** —— 检索 �
 
 ### 真实 FinQA test（100 样本抽样）
 
-| 指标 | Phase 8 | Phase 9 | Phase 10 | 提升 |
-|---|---|---|---|---|
-| 答案 EM | 1.0% | 6.0% | **7.0%** | **7×** |
-| 模板可检测子集 EM | — | 24.0% | 18.4% | — |
-| PoT 计算子集规模 | — | 25 题 | **38 题** | +13（ratio 模板） |
-| 文档级召回 recall@20 | 48% | **56%** | 56% | +8 pp |
+| 指标 | Phase 8 | Phase 9 | Phase 10 | Phase 11 | 提升 |
+|---|---|---|---|---|---|
+| 答案 EM | 1.0% | 6.0% | 7.0% | **8.0%** | **8×** |
+| 模板可检测子集 EM | — | 24.0% | 18.4% | **21.1%** | — |
+| PoT 计算子集规模 | — | 25 题 | **38 题** | 38 题 | +13（ratio 模板） |
+| 文档级召回 | 48% | 56% | 56% | **88.0%** | **+40 pp** |
 
-**答案类型分解**（诚实口径）：提取型 4% / 推导型 93%（需 program 算术）/ 布尔型 3%。确定性模板覆盖 growth_pct / difference / cross_entity_diff / argmax_relay / **ratio**（"what percentage of X are Y"，FinQA test 占 ~17%）五类。Phase 10 ratio 模板在 100 样本上检出执行 13 题（此前 0）、新增 1 题正确（无样本由对转错）。Phase 10.1 锚定改进（年份 token / "after \<year\>"→thereafter 行 / 正文脚注扫描 / 分母 total 行兜底 / 列一致性 / 负值剪枝）后，**理想检索口径**（gold 文档全文直接喂给执行器，剥离检索层）ratio 锚定精度 **2/13 → 7/13**；端到端复跑 EM 7.0% 持平（13 道 ratio 题答案全部按新锚定改变、零回归）——上界瓶颈从锚定层转移到检索层（doc recall 56%）。复现：`scripts/verify_ratio_ideal.py`。LLM 程序生成路径（table_sum / exp_avg / 多步算术链）基础设施就绪（DSL 执行器 + 校验 + 降级），未接真实 provider 全量评测（无 API key 不虚报数字），见 Roadmap。
+**Phase 11 检索召回修复（+32 pp doc recall）**：归因诊断（`scripts/diagnose_recall.py` 六组对照 + `scripts/trace_gold_loss.py` 44 失败样本逐个跑图追踪）发现检索层本身 88%，端到端 56% 的损耗 59% 来自"四要素校验失败 chunk 被永久拉黑后**从证据池驱逐**"（verifier 对每个子任务按各自 claim 重新校验，chunk 在子任务 A 失败不代表在子任务 B 下无价值）。修复四件套：①排除语义修正（只防新检索重复命中、不驱逐历史证据）②表格 chunk 豁免（`is_table` 标记，四要素对表格天然过严）③replanner 原地打转终止（重复子任务视为无新信号）④端到端切 bge 索引（`make benchmark-finqa`）。EM 净 +2/-1（43/72 新对，73 诚实披露为更大证据池下 ratio 锚定变化）。
+
+**答案类型分解**（诚实口径）：提取型 4% / 推导型 93%（需 program 算术）/ 布尔型 3%。确定性模板覆盖 growth_pct / difference / cross_entity_diff / argmax_relay / **ratio**（"what percentage of X are Y"，FinQA test 占 ~17%）五类。Phase 10 ratio 模板在 100 样本上检出执行 13 题（此前 0）。Phase 10.1 锚定改进（年份 token / "after \<year\>"→thereafter 行 / 正文脚注扫描 / 分母 total 行兜底 / 列一致性 / 负值剪枝）后，**理想检索口径**（gold 文档全文直接喂给执行器，剥离检索层）ratio 锚定精度 **2/13 → 7/13**。复现：`scripts/verify_ratio_ideal.py`。LLM 程序生成路径（table_sum / exp_avg / 多步算术链）基础设施就绪（DSL 执行器 + 校验 + 降级），未接真实 provider 全量评测（无 API key 不虚报数字），见 Roadmap。
 
 ### 真实 ConvFinQA dev 多轮（100 轮）
 
@@ -159,7 +161,7 @@ VeriFin 的答案：**以证据校验为中心的 Agent 循环** —— 检索 �
 > 语义 embedding（bge-small-en-v1.5）替换无语义哈希向量带来明确提升；通用
 > cross-encoder rerank 在此口径无益，属诚实边界。复现：`scripts/compare_retrieval.py`。
 
-完整报告见 `results/finqa_v8/report.md`（Phase 9）、`results/finqa_v10/report.md`（Phase 10）、`results/finqa_v10_1/report.md`（Phase 10.1 锚定改进复跑）、`results/convfinqa_check/report.md`、`results/synth_check4/report.md`、`results/multihop_check/report.md`（含错误分析与诚实声明）。
+完整报告见 `results/finqa_v8/report.md`（Phase 9）、`results/finqa_v10/report.md`（Phase 10）、`results/finqa_v10_1/report.md`（Phase 10.1 锚定改进复跑）、`results/finqa_v11/report.md`（Phase 11 检索召回修复）、`results/convfinqa_check/report.md`、`results/synth_check4/report.md`、`results/multihop_check/report.md`（含错误分析与诚实声明）。
 
 ---
 
@@ -228,7 +230,7 @@ curl -X POST http://127.0.0.1:8000/ask \
 ### 运行测试
 
 ```bash
-python -m pytest tests/ -q        # 162 项全绿
+python -m pytest tests/ -q        # 184 项全绿
 ```
 
 ---
@@ -255,7 +257,8 @@ src/verifin/
 
 ## Roadmap
 
-- [x] **Phase 10**：ratio 比率模板（短语锚定，FinQA test 占 ~17% 的题型，EM 6.0% → 7.0%）+ FinQA DSL 多步执行器（`#N` 引用 / table_sum / table_average）+ 可插拔 LLM 程序生成器（结构校验 + 失败降级，mock provider 单测锁定语义）；Phase 10.1 ratio 锚定改进（年份 token / thereafter 行 / 正文脚注扫描 / 分母 total 行兜底 / 列一致性 / 负值剪枝，理想检索口径 2/13 → 7/13，181 项测试全绿）
+- [x] **Phase 10**：ratio 比率模板（短语锚定，FinQA test 占 ~17% 的题型，EM 6.0% → 7.0%）+ FinQA DSL 多步执行器（`#N` 引用 / table_sum / table_average）+ 可插拔 LLM 程序生成器（结构校验 + 失败降级，mock provider 单测锁定语义）；Phase 10.1 ratio 锚定改进（年份 token / thereafter 行 / 正文脚注扫描 / 分母 total 行兜底 / 列一致性 / 负值剪枝，理想检索口径 2/13 → 7/13）
+- [x] **Phase 11**：检索召回修复——损耗归因（检索层 88% vs 端到端 56%，44 失败样本逐个跑图追踪：59% 是 exclude 拉黑驱逐 gold）+ 排除语义修正（不驱逐历史证据）+ 表格 chunk 豁免 + replanner 打转终止 + bge 索引端到端切换。doc recall **56% → 88.0%（+32 pp）**、EM **7.0% → 8.0%**、184 项测试全绿
 - [ ] LLM program 生成接入真实 provider 全量评测（基础设施就绪，无 API key 不虚报数字）；覆盖 FinQA 剩余 ~70% 推导型问题
 - [x] 真实语义 embedding（bge-small-en-v1.5）替换 hash-Dense（doc recall +5 pp）
 - [x] 可插拔 LLM 规划层（任意 provider，失败降级规则 planner，零外部依赖兜底）
