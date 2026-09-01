@@ -371,7 +371,11 @@ def retriever_node(state: Any) -> dict:
         docs = _coerce_docs(result.output)
     else:
         logger.warning("retrieve 工具执行失败: {}", result.error)
-    # 带记忆（Phase 5 修正版）：过滤已四要素校验失败的 chunk，不重复失败方向
+    # 带记忆（Phase 5 修正版 / Phase 11 语义修正）：排除**只过滤本轮新检索
+    # 结果**（不在失败方向的 chunk 上重复检索），**不驱逐历史轮已入池的
+    # 证据**——verifier 对每个子任务按各自 claim 重新校验全部 docs，
+    # chunk 在子任务 A 失败不代表在细化后的子任务 B 下无价值；驱逐曾造
+    # 成 gold 文档整批丢失（FinQA 26/44 doc recall 失败样本的主因）。
     excluded = set(s.get("exclude_chunk_ids") or [])
     if excluded:
         docs = [doc for doc in docs if doc.get("chunk_id") not in excluded]
@@ -392,10 +396,9 @@ def retriever_node(state: Any) -> dict:
         merged.append(doc)
         if len(merged) >= 80:
             break
-    docs = [doc for doc in merged if doc.get("chunk_id") not in excluded]
     return _hook(
         s, "retriever", task,
-        retrieved_docs=docs,
+        retrieved_docs=merged,
         tool_call_history=list(s.get("tool_call_history") or []) + [call],
         next_step="verifier",
     )
@@ -1169,6 +1172,19 @@ def replanner_node(state: Any) -> dict:
         )
 
     new_task = plan["new_sub_task"]
+    # Phase 11：重复子任务检测——新任务与既有 sub_tasks 文本相同说明重规划
+    # 原地打转（无新检索方向，实测失败样本连续生成相同任务浪费轮次并污染
+    # 失败记忆）→ 视为无新信号，走终止路径（人性化诊断 + END）
+    if new_task and new_task in sub_tasks:
+        logger.warning("重规划终止：新子任务与既有任务重复（原地打转）")
+        answer = "\n".join(_failure_message_lines(s))
+        return _hook(
+            s, "replanner", query,
+            messages=[{"role": "assistant", "content": answer}],
+            failure_history=failure_history,
+            hook_extra={"replan_strategy": "duplicate_task_terminated"},
+            next_step="end",
+        )
     new_index = len(sub_tasks)  # 新任务追加到队尾并切到它
     sub_tasks.append(new_task)
     # 失败 chunk 累积排除（去重保序）

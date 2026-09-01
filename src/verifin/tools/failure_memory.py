@@ -126,6 +126,9 @@ class FailureMemoryStore:
 
         只含 ``passed=False`` 的 chunk：大差异冲突中四要素通过的 chunk
         不在此列（它们是"通过但互相矛盾"，排除应由冲突仲裁处理）。
+        Phase 11 豁免：``is_table=True`` 的表格 chunk 不排除——四要素校验
+        对表格天然过严（行标签无散文四要素文本），永久拉黑导致重检索到
+        gold 表格又被过滤（端到端 doc recall 损耗主因，26/44 失败样本）。
         """
         chunk_ids: List[str] = []
         for entry in self.entries:
@@ -135,6 +138,7 @@ class FailureMemoryStore:
                     isinstance(result, dict)
                     and result.get("passed") is False
                     and result.get("chunk_id")
+                    and not result.get("is_table")
                 ):
                     chunk_ids.append(str(result["chunk_id"]))
         return _dedup(chunk_ids)
