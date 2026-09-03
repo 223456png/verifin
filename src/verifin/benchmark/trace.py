@@ -45,9 +45,12 @@ def extract_answer_value(state: dict, query: str) -> list:
         if calc.get("difference") is not None:
             candidates.append((float(calc["difference"]), calc.get("difference_unit")))
         # Phase 9：备选程序组合（候选程序枚举口径，≤2 组合的比率/差值刻度）
+        # Phase 12：average 备选的 value 刻度（均值无 fraction/difference）
         for alternate in calc.get("alternates") or []:
             if not isinstance(alternate, dict):
                 continue
+            if alternate.get("value") is not None:
+                candidates.append((float(alternate["value"]), alternate.get("unit")))
             if alternate.get("fraction") is not None:
                 candidates.append((float(alternate["fraction"]), None))
             if alternate.get("difference") is not None:

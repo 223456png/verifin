@@ -38,11 +38,19 @@ def test_detect_difference_program() -> None:
     assert spec.target_period == "2015"
 
 
-# 3. 防误伤：无关键词 / 无年份 / growth 无双年份 → None
+# 3. 防误伤：无关键词 / 无年份 / growth 无年份 → None
 def test_detect_program_negative() -> None:
     assert detect_program("What was NovaTech revenue in 2024?") is None
-    assert detect_program("What was NovaTech growth in 2024?") is None
     assert detect_program("Tell me about the company.") is None
+    # Phase 12 行为变更（D5）："growth" 单年份现为 difference 模板
+    # （"growth in 2024" = 2024 vs 2023，FinQA gold 同为
+    # subtract(cur, prev), divide(#0, prev)）；无年份 growth 仍 None
+    assert detect_program("What was NovaTech growth?") is None
+    growth_1yr = detect_program("What was NovaTech growth in 2024?")
+    assert growth_1yr is not None
+    assert growth_1yr.kind == "difference"
+    assert growth_1yr.base_period == "2023"
+    assert growth_1yr.target_period == "2024"
 
 
 # 4. 单位归一：billion vs million 组合可执行（12B - 10,000M → +20%）
@@ -578,3 +586,199 @@ def test_execute_dsl_errors() -> None:
     assert "error" in execute_dsl("table_sum(v1)", {"v1": 1.0})
     # 空值组
     assert "error" in execute_dsl("table_sum(t1)", {"t1": []})
+
+
+# ---------------------------------------------------------------------------
+# Phase 12 — ratio 句式扩展 + average 模板 + growth/difference 关键词扩展
+
+# 23. ratio_of_to："ratio of NUM to DEN"（48 题未检出的最大缺口）
+def test_detect_ratio_of_to() -> None:
+    spec = detect_program(
+        "what is the ratio of the total flight attendants to total "
+        "maintenance personnel ?"
+    )
+    assert spec is not None
+    assert spec.kind == "ratio"
+    assert spec.numerator == "the total flight attendants"
+    assert spec.denominator == "total maintenance personnel"
+    # 双年份放行（D3）：年份在分子/分母短语内，base_period 为空
+    two_years = detect_program(
+        "what was the ratio of the purchase in december 2012 to the "
+        "purchase in january 2013 ?"
+    )
+    assert two_years is not None and two_years.kind == "ratio"
+    assert two_years.base_period == ""
+    assert "2012" in (two_years.numerator or "")
+    assert "2013" in (two_years.denominator or "")
+
+
+# 24. hyphen_ratio："debt-to-asset ratio" → divide(debt, asset)
+def test_detect_hyphen_ratio() -> None:
+    spec = detect_program("what is the debt-to-asset ratio ?")
+    assert spec is not None
+    assert spec.kind == "ratio"
+    assert spec.numerator == "debt"
+    assert spec.denominator == "asset"
+
+
+# 25. pct_of_to："percent of NUM to DEN" + 假连接词排除（D2）
+def test_detect_pct_of_to() -> None:
+    spec = detect_program(
+        "in 2010 what was the percent of the income tax benefit to the "
+        "stock based compensation cost ?"
+    )
+    assert spec is not None
+    assert spec.kind == "ratio"
+    assert spec.numerator == "the income tax benefit"
+    assert spec.denominator == "the stock based compensation cost"
+    # "not leased" 否定形态：percent of NUM（not leased）to DEN
+    negated = detect_program(
+        "as of december 2012 what is the percent of the square footage "
+        "not leased to the total square footage ?"
+    )
+    assert negated is not None and negated.kind == "ratio"
+    assert "not leased" in (negated.numerator or "")
+    assert negated.denominator == "the total square footage"
+
+
+# 25a. pct_of_to 假连接词：due to / compared to 等不触发
+def test_detect_pct_of_to_false_connectives() -> None:
+    # "due to" 是短语内连接词，非分母引导词——既有 _RATIO_RE 先匹配
+    # （"are" 连接），语义正确且分母不是 "expire"
+    spec = detect_program(
+        "what percentage of obligations are due to expire in 2018 ?"
+    )
+    assert spec is not None
+    assert spec.kind == "ratio"
+    assert spec.denominator == "obligations"
+    assert spec.numerator == "due to expire in 2018"
+    # 明确的假连接词形态：compared to（无年份，不会走 growth）
+    assert detect_program(
+        "what was the percent of revenue compared to prior year ?"
+    ) is None
+
+
+# 26. as_pct_of / represented："NUM as a percentage of DEN" 与倒装
+def test_detect_as_pct_of_and_represented() -> None:
+    spec = detect_program(
+        "what is the borrowing under the term loan facility as a "
+        "percentage of the total contractual maturities of debt ?"
+    )
+    assert spec is not None
+    assert spec.kind == "ratio"
+    assert "borrowing under the term loan facility" in (spec.numerator or "")
+    assert spec.denominator == "the total contractual maturities of debt"
+    # 倒装："NUM represented what percentage of DEN"
+    rep = detect_program(
+        "brazilian paper sales represented what percentage of printing "
+        "papers in 2006 ?"
+    )
+    assert rep is not None and rep.kind == "ratio"
+    assert "brazilian paper sales" in (rep.numerator or "")
+    assert "printing papers" in (rep.denominator or "")
+    assert rep.base_period == "2006"
+
+
+# 27. average：between/from Y1 and/to Y2 → 年份区间
+def test_detect_average() -> None:
+    spec = detect_program(
+        "what was the average net revenue between 2016 and 2017 in millions ?"
+    )
+    assert spec is not None
+    assert spec.kind == "average"
+    assert spec.periods == ["2016", "2017"]
+    assert spec.base_period == "2016"
+    assert spec.target_period == "2017"
+    # from ... to ... 三年区间
+    span = detect_program("what was the average cash flow from 2004 to 2006 ?")
+    assert span is not None and span.kind == "average"
+    assert span.periods == ["2004", "2005", "2006"]
+    # average 不劫持双年份 growth 问句
+    growth = detect_program(
+        "what was the percentage change in revenue between 2016 and 2017 ?"
+    )
+    assert growth is not None and growth.kind == "growth_pct"
+    # 无年份区间的 average 不触发（走提取/LLM 路径）
+    assert detect_program("what was the average share price in 2015 ?") is None
+
+
+# 28. average 执行：逐年取值求均值 + 单位一致剪枝 + 缺期降级
+def test_execute_average() -> None:
+    spec = ProgramSpec(
+        kind="average", base_period="2016", target_period="2017",
+        periods=["2016", "2017"],
+    )
+    result = ProgramExecutor().execute(spec, {
+        "2016": [ValueCandidate(value=703.1, unit="million", period="2016")],
+        "2017": [ValueCandidate(value=705.4, unit="million", period="2017")],
+    })
+    assert result.value == pytest.approx(704.25)
+    assert result.unit == "million"
+    assert result.expression == "(703.1 + 705.4) / 2"
+    # 三年区间均值
+    span = ProgramSpec(
+        kind="average", base_period="2004", target_period="2006",
+        periods=["2004", "2005", "2006"],
+    )
+    span_result = ProgramExecutor().execute(span, {
+        "2004": [ValueCandidate(value=900.0, unit="million", period="2004")],
+        "2005": [ValueCandidate(value=957.4, unit="million", period="2005")],
+        "2006": [ValueCandidate(value=819.5, unit="million", period="2006")],
+    })
+    assert span_result.value == pytest.approx((900.0 + 957.4 + 819.5) / 3)
+    # 量纲冲突（% vs million）→ 无可用组合
+    mixed = ProgramExecutor().execute(spec, {
+        "2016": [ValueCandidate(value=703.1, unit="million", period="2016")],
+        "2017": [ValueCandidate(value=42.0, unit="%", period="2017")],
+    })
+    assert mixed.value is None
+    assert "plausible" in (mixed.error or "")
+    # 缺一年候选 → error 降级
+    missing = ProgramExecutor().execute(spec, {
+        "2016": [ValueCandidate(value=703.1, unit="million", period="2016")],
+    })
+    assert missing.value is None
+    assert "missing" in (missing.error or "")
+
+
+# 29. ROI / return on investment / rate of return → growth_pct（D6）
+def test_detect_roi_as_growth() -> None:
+    spec = detect_program(
+        "what is the roi of an investment in ups from 2008 to 2009 ?"
+    )
+    assert spec is not None
+    assert spec.kind == "growth_pct"
+    assert spec.base_period == "2008"
+    assert spec.target_period == "2009"
+    roi = detect_program(
+        "what is the return on investment for s&p500 from 2004 to 2006 ?"
+    )
+    assert roi is not None and roi.kind == "growth_pct"
+    ror = detect_program(
+        "what is the rate of return in cadence design systems inc . of "
+        "an investment from 2010 to 2011 ?"
+    )
+    assert ror is not None and ror.kind == "growth_pct"
+
+
+# 30. 新句式不抢既有模板流量（D1 顺序保障）
+def test_new_patterns_do_not_hijack_existing() -> None:
+    # 既有 _RATIO_RE 形态仍先匹配（"are" 连接，无 " to "）
+    spec = detect_program(
+        "what percentage of total facilities as measured in square feet "
+        "are leased ?"
+    )
+    assert spec is not None and spec.kind == "ratio"
+    assert spec.denominator == "total facilities as measured in square feet"
+    assert spec.numerator == "leased"
+    # growth 双年份不被 ratio 句式劫持（"percentage ... from 2023 to 2024"
+    # 含 growth 关键词 → growth_pct 优先）
+    growth = detect_program(
+        "what was the percentage of revenue from 2023 to 2024 ?"
+    )
+    assert growth is not None and growth.kind == "growth_pct"
+    # cross_entity_diff 形态不受 ratio 变体影响
+    cross = detect_program(
+        "How much higher was Vertex revenue than NovaTech revenue in 2024?"
+    )
+    assert cross is not None and cross.kind == "cross_entity_diff"

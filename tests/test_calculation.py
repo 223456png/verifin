@@ -86,9 +86,17 @@ def test_planner_detects_percentage_query() -> None:
     assert single_year_change["calculation_spec"]["kind"] == "difference"
     assert single_year_change["calculation_spec"]["base_period"] == "2023"
     assert single_year_change["calculation_spec"]["target_period"] == "2024"
-    # growth 无双年份仍不触发（"growth in 2024" 常指描述性表述而非计算）
-    assert planner_node(_stub_state(
+    # Phase 12 行为变更（D5）：单年份 growth 触发 difference 模板
+    # （"growth in 2024" = 2024 vs 2023，与 FinQA gold program
+    # subtract(cur, prev), divide(#0, prev) 同构）；无年份 growth 不触发
+    growth_1yr = planner_node(_stub_state(
         "What was NovaTech growth in 2024?"
+    ))
+    assert growth_1yr["calculation_requested"] is True
+    assert growth_1yr["calculation_spec"]["kind"] == "difference"
+    assert growth_1yr["calculation_spec"]["base_period"] == "2023"
+    assert planner_node(_stub_state(
+        "What was NovaTech growth?"
     ))["calculation_requested"] is False
     assert _detect_calculation("plain revenue question") is None
 
