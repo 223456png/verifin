@@ -29,6 +29,14 @@ _PERIOD_RE = re.compile(r"\b(20\d{2}|FY\s?20\d{2}|Q[1-4]\s?20\d{2})\b")
 # 单位可选；% 无词边界要求，词单位（million/billion/M/B）要求词边界
 _VALUE_RE = re.compile(r"\$?\s*(\d[\d,]*\.?\d*)\s*(%|(?:million|billion|[MB])\b)?", re.IGNORECASE)
 _YEAR_VALUE_RE = re.compile(r"\b20\d{2}\b")
+# roll-forward 行结构（Phase 12.1）：期初/期末/期末余额措辞或月份日期，
+# 配合行标签内嵌年份 → 日期精确锚定期间的变化题操作数
+_ROLLFORWARD_ROW_RE = re.compile(
+    r"\b(?:beginning|ending|balance\b|balances)"
+    r"|\b(?:january|february|march|april|may|june|july"
+    r"|august|september|october|november|december)\b",
+    re.IGNORECASE,
+)
 # Phase 10.1：短语/行标签中的年份 token（"due in 2018" → 行 "2018"）
 # 与 "after <year>" → thereafter 行（"due after 2020" → 行 "2021 - thereafter"）
 _PHRASE_YEAR_RE = re.compile(r"\b((?:19|20)\d{2})\b")
@@ -199,6 +207,8 @@ def parse_tables(text: str) -> List[TableSpec]:
 
 
 _YEAR_IN_CELL_RE = re.compile(r"20\d{2}")
+# 纯年份单元格（"2015" / "FY2023"）——首列是纯年份时视为无标签列的年份列
+_PURE_YEAR_CELL_RE = re.compile(r"(?:FY\s?)?20\d{2}", re.IGNORECASE)
 # FinQA 括号负数惯例："(32)" → -32
 _PAREN_NEG_RE = re.compile(r"^\(\s*([\d,.]+)\s*\)$")
 
@@ -213,11 +223,19 @@ def _parse_cell_value(cell: str):
 
 
 def _table_column_years(table: TableSpec) -> Dict[int, int]:
-    """从表头行聚合每列年份；明细行优先（多级表头：组行 FY2024 不应覆盖明细 2023/2024）。"""
+    """从表头行聚合每列年份；明细行优先（多级表头：组行 FY2024 不应覆盖明细 2023/2024）。
+
+    Phase 12.1：首列（行标签列）含日期文本（"Beginning balance as of
+    December 1, 2007"）不是年份列——按列年份对齐会把标签列当年份列，
+    标签文本被 _parse_cell_value 解析出假数值（"November 28, 2008" → 28）。
+    纯年份单元格（"2015"/"FY2023"）仍视为年份列（无标签列的表）。
+    """
     years: Dict[int, int] = {}
     for header_row in reversed(table.headers):
         for col, cell in enumerate(header_row):
             if col in years:
+                continue
+            if col == 0 and not _PURE_YEAR_CELL_RE.fullmatch(cell.strip()):
                 continue
             match = _YEAR_IN_CELL_RE.search(cell)
             if match:
@@ -427,7 +445,17 @@ class EvidenceExtractor:
         for table in parse_tables(content):
             column_years = _table_column_years(table)
             cols = [col for col, yr in column_years.items() if str(yr) == str(year)]
-            for row_index, cells in enumerate(table.rows):
+            # Phase 12.1：无分隔符 markdown 表的首条数据行会被当表头
+            # （"Beginning balance as of December 1, 2007 | $201,808"）——
+            # 首单元格「含年份且非纯年份」的表头行按数据行补扫（仅垂直
+            # 分支：此类表无列年份对齐，水平分支天然空）
+            header_data_rows = [
+                row for row in table.headers
+                if row and row[0].strip()
+                and _YEAR_VALUE_RE.search(row[0])
+                and not _PURE_YEAR_CELL_RE.fullmatch(row[0].strip())
+            ]
+            for row_index, cells in enumerate(list(table.rows) + header_data_rows):
                 if not cells or not cells[0].strip():
                     continue  # 合并续行
                 label = cells[0].strip()
@@ -464,27 +492,43 @@ class EvidenceExtractor:
                         return 0.5
                     return 1.0 if row_metric else 8.0
 
-                def _append(value: float, unit: Optional[str]) -> None:
+                def _append(
+                    value: float, unit: Optional[str],
+                    override: Optional[float] = None,
+                ) -> None:
                     out.append({
                         "value": value,
                         "unit": unit,
                         "period": str(year),
                         "row_label": label,
                         "metric": row_metric,
-                        "anchor_score": _score(),
+                        "anchor_score": override
+                        if override is not None else _score(),
                     })
 
-                # 水平表：列年份对齐
-                for col in cols:
-                    parsed = _parse_cell_value(table.cell(row_index, col))
-                    if parsed is not None:
-                        _append(parsed[0], parsed[1])
+                # 水平表：列年份对齐（补扫的表头数据行不参与：其年份列
+                # 单元格是表头文本而非数值）
+                if row_index < len(table.rows):
+                    for col in cols:
+                        parsed = _parse_cell_value(table.cell(row_index, col))
+                        if parsed is not None:
+                            _append(parsed[0], parsed[1])
                 # 垂直表：行标签自带年份（"2014 net revenue"）
                 if _YEAR_VALUE_RE.search(label) and str(year) in label:
+                    # Phase 12.1：roll-forward 行结构锚定——「期初/期末/月末余额」
+                    # 或含月份日期的行标签（"Beginning balance as of December 1,
+                    # 2007"）内嵌了精确期间，且双期行几乎总在同 chunk 配对
+                    # （跨期变化题的操作数即期初/期末对）；指标词常在章节标题
+                    # 而非行标签（ADBE 未确认税务利益 roll-forward 实测），
+                    # 纯词重叠锚定会漏——日期结构信号锚定 0.5 层级
+                    structural = bool(
+                        _ROLLFORWARD_ROW_RE.search(label)
+                    )
                     for col in range(1, len(cells)):
                         parsed = _parse_cell_value(cells[col])
                         if parsed is not None:
-                            _append(parsed[0], parsed[1])
+                            _append(parsed[0], parsed[1],
+                                    override=0.5 if structural else None)
         out.sort(key=lambda item: item["anchor_score"])
         return out[:max_n]
 

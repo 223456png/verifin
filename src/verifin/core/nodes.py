@@ -142,6 +142,8 @@ def _detect_calculation(query: str) -> Optional[dict]:
         # Phase 10 ratio 模板透传（分子/分母短语）
         "numerator": spec.numerator,
         "denominator": spec.denominator,
+        # Phase 12 average 模板透传（年份区间）
+        "periods": list(spec.periods),
     }
 
 
@@ -657,6 +659,17 @@ def _ratio_candidates(s: dict, program_spec) -> Dict[str, list]:
     total_fallback: List[tuple] = []
     query_text = _latest_user_query(s)
     year = program_spec.base_period or None
+    # Phase 12：短语内年份锚定——"ratio of the purchase in december 2012
+    # to the purchase in january 2013" 的两个年份分别在分子/分母短语内
+    # （spec.base_period 为空），按各自短语首个 20xx 年份分别锚定
+    def _phrase_year(phrase: Optional[str]) -> Optional[str]:
+        m = re.search(r"\b(20\d{2})\b", phrase or "")
+        return m.group(1) if m else None
+
+    phrase_anchors = (
+        ("num", program_spec.numerator, _phrase_year(program_spec.numerator) or year),
+        ("den", program_spec.denominator, _phrase_year(program_spec.denominator) or year),
+    )
 
     def _add(bucket: str, item: dict, chunk_id, penalty: float) -> None:
         lst = candidates[bucket]
@@ -675,18 +688,16 @@ def _ratio_candidates(s: dict, program_spec) -> Dict[str, list]:
         )
 
     def _scan(content: str, chunk_id, penalty: float = 0.0) -> None:
-        for bucket, phrase in (
-            ("num", program_spec.numerator), ("den", program_spec.denominator),
-        ):
+        for bucket, phrase, phrase_year in phrase_anchors:
             if not phrase:
                 continue
             items = EvidenceExtractor.collect_phrase_values(
-                content, phrase, year
+                content, phrase, phrase_year
             )
             if not items:
                 # 短语无实词（"due in 2018"）→ 年份锚定兜底
-                if year:
-                    items = EvidenceExtractor.collect_year_values(content, year)
+                if phrase_year:
+                    items = EvidenceExtractor.collect_year_values(content, phrase_year)
             for item in items:
                 _add(bucket, item, chunk_id, penalty)
         # 分母 total 行回退候选（Phase 10.1）：先缓存，仅当分母短语扫描
@@ -887,6 +898,18 @@ def _calculator_impl(state: Any, llm_programmer=None) -> dict:
         second_metric=spec.get("second_metric"),
         numerator=spec.get("numerator"),
         denominator=spec.get("denominator"),
+        periods=list(spec.get("periods") or []),
+    )
+    # Phase 12：均值流按 periods 区间逐年扫描；growth/difference 流 periods
+    # 为空 → 行为不变（base/target 两年份）
+    scan_years = tuple(
+        dict.fromkeys(
+            y for y in (
+                *(program_spec.periods or []),
+                program_spec.base_period,
+                program_spec.target_period,
+            ) if y
+        )
     )
 
     def _registry_evaluator(expression: str) -> dict:
@@ -959,7 +982,7 @@ def _calculator_impl(state: Any, llm_programmer=None) -> dict:
                 )
                 # 证据 period 可能是 "FY2023"/"2013-2023" 形态 → 子串归桶
                 matched = [
-                    year for year in (program_spec.base_period, program_spec.target_period)
+                    year for year in scan_years
                     if year and year in period
                 ]
                 if matched:
@@ -971,9 +994,17 @@ def _calculator_impl(state: Any, llm_programmer=None) -> dict:
     # 1b. 检索文档候选扫描：表格感知（列年份对齐/行标签年份 + 指标匹配 +
     #     行标签 × 问题词重叠）优先，字符距离锚定兜底
     query_text = _latest_user_query(s)
+    # Phase 12.1：chunk 级指标门控——与问题**零实词重叠**的 chunk 不产生
+    # 候选。年份锚定兜底（collect_year_values）会从任意含年份的 chunk 抓数，
+    # 跨公司无关文档（如包装销售散文对税务问题）的候选全为噪声；
+    # 金标 chunk 的行标签/章节语境几乎总含问题指标词（实测 ADBE 表 4 词
+    # 命中 vs IP 散文 0 命中）
+    query_word_tokens = EvidenceExtractor._content_tokens(query_text)
     for doc in [d for d in (s.get("retrieved_docs") or []) if isinstance(d, dict)]:
         content = str(doc.get("content") or "")
-        for year in (program_spec.base_period, program_spec.target_period):
+        if not (EvidenceExtractor._content_tokens(content) & query_word_tokens):
+            continue
+        for year in scan_years:
             if not year:
                 continue
             table_items = EvidenceExtractor.collect_table_year_values(
@@ -1027,7 +1058,7 @@ def _calculator_impl(state: Any, llm_programmer=None) -> dict:
             if not isinstance(chunk, dict):
                 continue
             content = str(chunk.get("content") or "")
-            for year in (program_spec.base_period, program_spec.target_period):
+            for year in scan_years:
                 if not year:
                     continue
                 for item in EvidenceExtractor.collect_table_year_values(
