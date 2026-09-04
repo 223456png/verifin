@@ -29,13 +29,21 @@ from verifin.tools.calculator import calc_expression
 from verifin.tools.unit_parser import normalize_to_base
 
 # growth 模板：计算关键词 + 双年份（from X to Y / compare to / between X and Y）
+# Phase 12 追加 ROI 族关键词：gold program 为 subtract(v_end, const_100),
+# divide(#0, const_100)——const_100 是表格指数基期值（2004=100），年份锚定
+# 扫描天然覆盖，按 growth 公式 (target-base)/|base| 求值语义一致
 _GROWTH_KEYWORDS = (
     "growth", "percentage", "increase", "decrease", "change",
     "grew", "grown", "rose", "yoy", "compare", "difference",
+    "roi", "return on investment", "rate of return",
 )
 # difference 模板：净变动关键词 + 单年份（基期 = 上一年，FinQA 高频模式）
+# Phase 12 追加 growth/grew：单年份增长问句（"growth rate in X for 2003"）
+# 的 gold program 同为 subtract(cur, prev), divide(#0, prev)——与净变动
+# 语义一致（growth_pct 双年份检测在前，不冲突）
 _DIFFERENCE_KEYWORDS = (
     "net change", "change", "difference", "decrease", "increase",
+    "growth", "grew",
 )
 _YEAR_RE = re.compile(r"\b(20\d{2})\b")
 _REVERSE_RE = re.compile(r"compar(?:e|ed)?\s+to|relative\s+to|versus|\bvs\b")
@@ -60,6 +68,50 @@ _RATIO_RE = re.compile(
     r"\bwhat\s+(?:percentage|percent|portion|fraction)\s+of\s+"
     r"(?P<den>.+?)\s+(?:is|are|was|were|do|does|did)\s+(?P<num>.+?)\s*[?.!]*\s*$",
     re.IGNORECASE | re.DOTALL,
+)
+# ratio 句式扩展（Phase 12）：FinQA 全测试集 5 种高频表面形式（未检出 87 题），
+# 全部映射为 divide(NUM, DEN) 复用 _execute_ratio。
+# "ratio of NUM to DEN"（48 题未检出）："what is the ratio of the total
+# flight attendants to total maintenance personnel"
+_RATIO_OF_TO_RE = re.compile(
+    r"\bratio\s+of\s+(?P<num>.+?)\s+to\s+(?P<den>.+?)\s*[?.!]*\s*$",
+    re.IGNORECASE | re.DOTALL,
+)
+# 连字符比率（4 题）："what is the debt-to-asset ratio?" → divide(debt, asset)
+_HYPHEN_RATIO_RE = re.compile(
+    r"\b(?P<num>[a-z]+)-to-(?P<den>[a-z]+)\s+ratio\b", re.IGNORECASE,
+)
+# "percent of NUM to DEN"（22 题未检出）："in 2010 what was the percent of
+# the income tax benefit to the stock based compensation cost"。
+# 假连接词排除（D2）：due/compared/according/prior/relative/next 后的 to
+# 是短语内连接词（"are due to expire" / "compared to prior year"）而非
+# 分母引导词——lookbehind 不含尾随空格（num 与 to 间的空格由后续
+# \s+ 消费，检查点在词边界）
+_PCT_OF_TO_RE = re.compile(
+    r"\bpercent(?:age)?\s+of\s+(?P<num>.+?)"
+    r"(?<!due)(?<!compared)(?<!according)(?<!prior)(?<!relative)(?<!next)"
+    r"\s+to\s+(?P<den>.+?)\s*[?.!]*\s*$",
+    re.IGNORECASE | re.DOTALL,
+)
+# "NUM as a percentage of DEN"（11 题未检出）："what is the borrowing under
+# the term loan facility as a percentage of the total contractual maturities"
+_AS_PCT_OF_RE = re.compile(
+    r"(?P<num>.+?)\s+as\s+a\s+percentage\s+of\s+(?P<den>.+?)\s*[?.!]*\s*$",
+    re.IGNORECASE | re.DOTALL,
+)
+# "NUM represented what percentage of DEN"（2 题）："brazilian paper sales
+# represented what percentage of printing papers in 2006?"
+_REPRESENTED_PCT_RE = re.compile(
+    r"(?P<num>.+?)\s+represented\s+what\s+percentage\s+of\s+(?P<den>.+?)\s*[?.!]*\s*$",
+    re.IGNORECASE | re.DOTALL,
+)
+# average 模板（Phase 12，17 题未检出）："what was the average net revenue
+# between 2016 and 2017" / "average cash flow from 2004 to 2006" → 年份
+# 区间逐年取值求均值（gold program: add(v1, v2), divide(#0, const_n)）
+_AVERAGE_RE = re.compile(
+    r"\baverage\b[^?.]{0,80}?\b(?:between|from)\s+(?P<y1>20\d{2})"
+    r"\s+(?:and|to|-)\s+(?P<y2>20\d{2})\b",
+    re.IGNORECASE,
 )
 # 实体 token 过滤（问句虚词/比较级不作为实体）
 _ENTITY_STOPWORDS = {
@@ -100,6 +152,9 @@ class ProgramSpec:
     # 分母短语（整体值，"of total facilities" 侧）→ divide(NUM, DEN)
     numerator: Optional[str] = None
     denominator: Optional[str] = None
+    # average（Phase 12）：年份区间（"between 2016 and 2017" →
+    # ["2016", "2017"]；"from 2004 to 2006" → 三年），逐年取值求均值
+    periods: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -182,16 +237,25 @@ def detect_program(query: str) -> Optional[ProgramSpec]:
     检测顺序（先具体后一般）：
     1. **argmax_relay**："which company had the highest <m1> in <year>,
        and what was its <m2>?" —— 多实体比较取极值 + 胜者第二指标接力；
-    2. **growth_pct**：计算关键词 + 两个不同年份（"from 2023 to 2024"）；
+    1b. **average**（Phase 12）："average <m> between/from Y1 and/to Y2"
+       → 年份区间逐年取值求均值（先于 growth：均值语义优先）；
+    2. **growth_pct**：计算关键词（含 Phase 12 的 roi / return on
+       investment / rate of return）+ 两个不同年份；
        反序表达（"X in 2024 compare to 2023"）交换基期与比较期；
     3. **ratio**（Phase 10）："what percentage/percent/portion/fraction
-       of <整体> is/are <部分>？" → ``divide(部分值, 整体值)``；年份 ≤1
+       of <整体> is/are <部分>?" → ``divide(部分值, 整体值)``；年份 ≤1
        （双年份归 growth_pct），FinQA test 占 17% 的比率题型；
+    3b. **ratio 句式扩展**（Phase 12）：ratio of NUM to DEN /
+       NUM-to-DEN ratio / percent of NUM to DEN / NUM as a percentage
+       of DEN / NUM represented what percentage of DEN——双年份放行
+       （年份在分子/分母短语内），全部复用 ratio 执行路径；
     4. **cross_entity_diff**：比较级 + than / difference between + 双实体
        （"How much higher was A revenue than B revenue in 2024" → A-B）；
        年份 ≤1 个（双年份归 growth_pct）；
-    5. **difference**：净变动关键词 + 单一年份（"net change in X during 2015"）
-       → 基期推断为上一年（FinQA 高频模式 ``subtract(cur, prev)``）；
+    5. **difference**：净变动关键词（Phase 12 追加 growth/grew——单年份
+       增长与净变动 gold program 同构）+ 单一年份（"net change in X
+       during 2015"）→ 基期推断为上一年（FinQA 高频模式
+       ``subtract(cur, prev)``）；
     6. 无关键词或无年份 → None（普通提取路径，防误伤）。
     """
     lowered = (query or "").lower()
@@ -216,7 +280,25 @@ def detect_program(query: str) -> Optional[ProgramSpec]:
                 reversed=order in ("lowest", "smallest"),
             )
 
-    # 2. growth_pct：关键词 + 双年份
+    # 2. average（Phase 12）："average <metric> between/from Y1 and/to Y2"
+    # （先于 growth 检测：均值语义优先于变动语义，"average percentage
+    # change" 类问句按均值理解）
+    avg = _AVERAGE_RE.search(query or "")
+    if avg:
+        y1, y2 = int(avg.group("y1")), int(avg.group("y2"))
+        if y1 > y2:
+            y1, y2 = y2, y1
+        # 区间上限 6 年（防异常跨度枚举爆炸）
+        if 0 < y2 - y1 <= 5:
+            periods = [str(y) for y in range(y1, y2 + 1)]
+            return ProgramSpec(
+                kind="average",
+                base_period=periods[0],
+                target_period=periods[-1],
+                periods=periods,
+            )
+
+    # 2b. growth_pct：关键词 + 双年份
     if any(keyword in lowered for keyword in _GROWTH_KEYWORDS) and len(years) >= 2:
         if _REVERSE_RE.search(lowered):
             base_period, target_period = years[1], years[0]
@@ -238,6 +320,35 @@ def detect_program(query: str) -> Optional[ProgramSpec]:
                 numerator=(ratio.group("num") or "").strip(),
                 denominator=(ratio.group("den") or "").strip(),
             )
+
+    # 3b. ratio 句式扩展（Phase 12）：ratio_of_to / pct_of_to / as_pct_of /
+    # represented——双年份放行（D3）：两个年份分别在分子/分母短语内
+    # （"ratio of the purchase in december 2012 to the purchase in
+    # january 2013"）；growth_pct 检测在前且需 growth 关键词，无关键词的
+    # 双年份 ratio 不会误入 growth
+    for pattern in (
+        _RATIO_OF_TO_RE, _PCT_OF_TO_RE, _AS_PCT_OF_RE, _REPRESENTED_PCT_RE,
+    ):
+        m = pattern.search(query or "")
+        if m and (m.group("num") or "").strip() and (m.group("den") or "").strip():
+            year = years[0] if len(years) == 1 else ""
+            return ProgramSpec(
+                kind="ratio",
+                base_period=year,
+                target_period=year,
+                numerator=(m.group("num") or "").strip(),
+                denominator=(m.group("den") or "").strip(),
+            )
+    hyphen = _HYPHEN_RATIO_RE.search(query or "")
+    if hyphen:
+        year = years[0] if len(years) == 1 else ""
+        return ProgramSpec(
+            kind="ratio",
+            base_period=year,
+            target_period=year,
+            numerator=hyphen.group("num"),
+            denominator=hyphen.group("den"),
+        )
 
     # 4. cross_entity_diff：比较级 + 双实体（年份 ≤1，双年份归 growth_pct）
     if len(years) <= 1 and (
@@ -308,6 +419,9 @@ class ProgramExecutor:
         # Phase 10：比率模板（candidates 键为 "num" / "den"）
         if spec.kind == "ratio":
             return self._execute_ratio(spec, candidates)
+        # Phase 12：均值模板（candidates 键为年份，复用 growth 候选路径）
+        if spec.kind == "average":
+            return self._execute_average(spec, candidates)
 
         def _sorted_bucket(period: str) -> List[ValueCandidate]:
             """按 anchor_score 升序截断（稳定排序，防低置信候选挤占名额）。"""
@@ -551,6 +665,98 @@ class ProgramExecutor:
                 for c in combos[1:3]
             ],
             evidence=[primary["num"].chunk_id, primary["den"].chunk_id],
+        )
+
+    # ------------------------------------------------------------------
+    # Phase 12：均值模板（"average X between 2016 and 2017" → 逐年取均值）
+
+    def _execute_average(
+        self, spec: ProgramSpec, candidates: Dict[str, List[ValueCandidate]]
+    ) -> ProgramResult:
+        """均值："average <metric> between/from Y1 and/to Y2" → sum/n。
+
+        每年桶按 anchor_score 取前 2 候选，枚举组合（≤2^n）：
+        单位归一后量纲必须一致（million vs billion 归一可比，% 与绝对值
+        冲突剪枝），均值经 PoT 求值。primary 取锚分最优组合，
+        alternates ≤2。
+
+        GT 刻度：gold program 为 ``add(v1, v2), add(#0, const_2),
+        divide(#1, const_2)``——输出即均值原值（非百分比）。
+        """
+        periods = [p for p in (spec.periods or []) if p] or [
+            p for p in (spec.base_period, spec.target_period) if p
+        ]
+        # 去重保序（异常问句年份重复）
+        periods = list(dict.fromkeys(periods))
+        if len(periods) < 2:
+            return ProgramResult(
+                kind=spec.kind,
+                error="average requires at least two periods",
+                evidence=[c.chunk_id for lst in candidates.values() for c in lst],
+            )
+
+        buckets: Dict[str, List[ValueCandidate]] = {}
+        for period in periods:
+            bucket = sorted(
+                candidates.get(period) or [], key=lambda c: c.anchor_score
+            )[:_MAX_CANDIDATES_PER_YEAR]
+            if not bucket:
+                return ProgramResult(
+                    kind=spec.kind,
+                    error=f"missing evidence values for period {period}",
+                    evidence=[c.chunk_id for lst in candidates.values() for c in lst],
+                )
+            buckets[period] = bucket
+
+        combos: List[dict] = []
+
+        def _recurse(idx: int, chosen: List[ValueCandidate]) -> None:
+            if idx == len(periods):
+                norms = [normalize_to_base(c.value, c.unit) for c in chosen]
+                if any(n is None for n in norms):
+                    return  # 未知单位
+                if len({n[1] for n in norms}) > 1:
+                    return  # 量纲冲突（% vs million）
+                vals = [n[0] for n in norms]
+                expression = (
+                    "(" + " + ".join(str(v) for v in vals) + f") / {len(vals)}"
+                )
+                out = self._evaluator(expression)
+                out = out if isinstance(out, dict) else {}
+                value = out.get("value")
+                if out.get("is_valid") is False or value is None:
+                    return
+                combos.append({
+                    "expression": expression,
+                    "value": round(float(value), 4),
+                    "chosen": list(chosen),
+                    "anchor_score": sum(c.anchor_score for c in chosen),
+                    "index": 0,
+                })
+                return
+            for cand in buckets[periods[idx]][:2]:  # 每年 ≤2 候选防组合爆炸
+                _recurse(idx + 1, chosen + [cand])
+
+        _recurse(0, [])
+
+        if not combos:
+            return ProgramResult(
+                kind=spec.kind,
+                error="no plausible value combination passed sanity pruning",
+                evidence=[c.chunk_id for b in buckets.values() for c in b],
+            )
+
+        combos.sort(key=lambda c: (c["anchor_score"], c["index"]))
+        primary = combos[0]
+        return ProgramResult(
+            kind=spec.kind,
+            expression=primary["expression"],
+            value=primary["value"],
+            unit=primary["chosen"][0].unit,
+            base=primary["chosen"][0].to_dict(),
+            target=primary["chosen"][-1].to_dict(),
+            alternates=[{"value": c["value"]} for c in combos[1:3]],
+            evidence=[c.chunk_id for c in primary["chosen"]],
         )
 
     # ------------------------------------------------------------------
