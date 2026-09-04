@@ -26,7 +26,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 _PROMPT = """你是金融问答系统的忠实性评审。给定【问题】【系统答案】【证据】，判定：
-1. faithful：答案中的每个数值/结论是否都能被证据支持（无证据支撑的编造 = false）；
+1. faithful：答案的结论是否被证据支持——注意本系统是计算型 PoT 架构，
+   答案数值允许是【证据中数值的算术运算结果】（如证据含 460.1 与 1020.1，
+   答案 45.10% 即为忠实）；只有当数值既不在证据中也非证据数值的合理
+   运算结果（凭空编造/引用外部知识）才判 false；
 2. relevancy：答案是否回答了问题本身（1=完全没回答 5=精准回答）。
 
 只输出 JSON：{{"faithful": true|false, "relevancy": 1-5, "reason": "一句话"}}
@@ -50,8 +53,13 @@ def _load_chunk_texts(db_path: Path, chunk_ids: list) -> dict:
     return out
 
 
-def _evidence_texts(result: dict, db_path: Path, max_chunks: int = 3) -> list:
-    """收集该样本四要素校验通过的 chunk 文本（去重，截断）。"""
+def _evidence_texts(result: dict, db_path: Path, max_chunks: int = 6) -> list:
+    """收集四要素校验通过的 chunk 文本（去重、按答案数值命中排序、截断）。
+
+    排序策略：含答案数值的 chunk 优先（judge 需要看到计算输入所在的
+    原始行——冒烟实测前 3 个通过 chunk 常不含金标行，导致答对的题
+    被误判"编造"）；其余按校验通过顺序补充。
+    """
     ids: list = []
     for flags in (result.get("verify_flags") or {}).values():
         if not isinstance(flags, dict):
@@ -61,9 +69,17 @@ def _evidence_texts(result: dict, db_path: Path, max_chunks: int = 3) -> list:
                 cid = str(r["chunk_id"])
                 if cid not in ids:
                     ids.append(cid)
-    texts = _load_chunk_texts(db_path, ids[:max_chunks])
+    texts = _load_chunk_texts(db_path, ids[:max_chunks * 3])
+    answer_nums = set(re.findall(r"-?\d[\d,]*\.?\d*", str(result.get("answer") or "")))
+
+    def _rank(cid: str) -> int:
+        entry = texts.get(cid)
+        text = entry[1] if isinstance(entry, tuple) else str(entry or "")
+        return 0 if any(n.replace(",", "") in text.replace(",", "") for n in answer_nums) else 1
+
+    ranked = sorted(ids, key=_rank)[:max_chunks]
     out = []
-    for cid in ids[:max_chunks]:
+    for cid in ranked:
         if cid in texts:
             doc_id, content = texts[cid]
             out.append(f"[{doc_id}] {content[:400]}")
