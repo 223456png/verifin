@@ -411,6 +411,41 @@ def _next_after_queue(state: dict) -> str:
     return "calculator" if state.get("calculation_requested") else "synthesizer"
 
 
+def _resolve_primary_entity(docs: list) -> Optional[str]:
+    """从检索结果解析主实体（Phase 12.5 实体门控）：排名加权投票 + 明显多数。
+
+    FinQA 问题多不含公司名 → claim.entity 恒为 None，四要素退化成期间+
+    指标词匹配，跨公司同构表 chunk 全部放行（实测通过池精度 5.6%）。
+
+    投票规则（宁缺勿错）：rank 加权 w=1/(rank+1)，注入需同时满足
+    ①赢家原始票数 ≥2（防单个 chunk 的表头大写词被误抽成实体）；
+    ②赢家权重 ≥ 2× 亚军——检索被噪声同构表污染时各公司票数接近，
+    放弃注入避免误杀金标 chunk（[43] 实测：SYY/GIS/ZBH 混排，任何
+    简单多数都会错杀）。
+    """
+    from verifin.tools.verifier import _DEFAULT_VERIFIER
+
+    votes: Dict[str, float] = {}
+    counts: Dict[str, int] = {}
+    for rank, doc in enumerate([d for d in (docs or []) if isinstance(d, dict)][:10]):
+        try:
+            ev = _DEFAULT_VERIFIER.extractor.extract(doc)
+        except Exception:  # noqa: BLE001 - 单条抽取失败不影响投票
+            continue
+        entity = str(getattr(ev, "entity", "") or "").strip()
+        if entity:
+            votes[entity] = votes.get(entity, 0.0) + 1.0 / (rank + 1)
+            counts[entity] = counts.get(entity, 0) + 1
+    if not votes:
+        return None
+    ordered = sorted(votes.items(), key=lambda kv: -kv[1])
+    best, w1 = ordered[0]
+    w2 = ordered[1][1] if len(ordered) > 1 else 0.0
+    if counts[best] < 2 or w1 < 2.0 * max(w2, 1e-9):
+        return None
+    return best
+
+
 def verifier_node(state: Any) -> dict:
     """四要素证据校验（真实 Verifier，经 ``verify_claim_batch`` 工具）。
 
@@ -439,6 +474,12 @@ def verifier_node(state: Any) -> dict:
     if not claim:
         claim = extract_claim(task) if task else {}
     docs = [doc for doc in (s.get("retrieved_docs") or []) if isinstance(doc, dict)]
+    # Phase 12.5 实体门控：claim 缺 entity 时从检索结果注入主实体（多数票），
+    # 激活实体硬校验——跨公司 chunk 在实体要素上 FAIL，通过池精度提升
+    if isinstance(claim, dict) and not claim.get("entity"):
+        primary = _resolve_primary_entity(docs)
+        if primary:
+            claim = {**claim, "entity": primary}
     # 会话偏好传入仲裁（Phase 6：偏好来源可信度加权）
     preferences = s.get("dialog_state") or {}
     batch = _call_tool(
