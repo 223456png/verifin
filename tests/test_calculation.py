@@ -86,9 +86,17 @@ def test_planner_detects_percentage_query() -> None:
     assert single_year_change["calculation_spec"]["kind"] == "difference"
     assert single_year_change["calculation_spec"]["base_period"] == "2023"
     assert single_year_change["calculation_spec"]["target_period"] == "2024"
-    # growth 无双年份仍不触发（"growth in 2024" 常指描述性表述而非计算）
-    assert planner_node(_stub_state(
+    # Phase 12 行为变更（D5）：单年份 growth 触发 difference 模板
+    # （"growth in 2024" = 2024 vs 2023，与 FinQA gold program
+    # subtract(cur, prev), divide(#0, prev) 同构）；无年份 growth 不触发
+    growth_1yr = planner_node(_stub_state(
         "What was NovaTech growth in 2024?"
+    ))
+    assert growth_1yr["calculation_requested"] is True
+    assert growth_1yr["calculation_spec"]["kind"] == "difference"
+    assert growth_1yr["calculation_spec"]["base_period"] == "2023"
+    assert planner_node(_stub_state(
+        "What was NovaTech growth?"
     ))["calculation_requested"] is False
     assert _detect_calculation("plain revenue question") is None
 
@@ -175,3 +183,97 @@ def test_end_to_end_with_calculation() -> None:
     answer = [m for m in final["messages"] if m.get("role") == "assistant"][-1]["content"]
     assert "20.0%" in answer
     assert final["next_step"] == "end"
+
+# ---------------------------------------------------------------------------
+# Phase 12.2 跨文档污染守卫（_ratio_candidates）
+# [72] 实测：CME 题（outstanding options / plans approved by security holders）
+# 检索召回 GPN 同构股权计划表 → 分母锚到异公司值 766801，
+# 正确分母是分子同表 total 行 1217121。
+# ---------------------------------------------------------------------------
+
+_CME_TABLE = (
+    "Table data:\n"
+    "| Plan Category | Number of Securities |\n"
+    "| equity compensation plans approved by security holders | 1211143 |\n"
+    "| equity compensation plans not approved by security holders | 5978 |\n"
+    "| total | 1217121 |\n"
+)
+_GPN_TABLE = (
+    "number of securities to be issued upon exercise of "
+    "outstanding options warrants and rights 766801\n"
+    "Table data:\n"
+    "| equity compensation plans approved by security holders | 766801 |\n"
+    "| total | 900000 |\n"
+)
+
+
+def _ratio_state() -> dict:
+    return {
+        "messages": [{
+            "role": "user",
+            "content": "what percentage of the outstanding options were from "
+                       "plans approved by security holders?",
+        }],
+        "retrieved_docs": [
+            {"chunk_id": "cme-1", "content": _CME_TABLE,
+             "metadata": {"doc_id": "CME/2010/page_123.pdf"}},
+            {"chunk_id": "gpn-1", "content": _GPN_TABLE,
+             "metadata": {"doc_id": "GPN/2014/page_92.pdf"}},
+        ],
+    }
+
+
+def _ratio_spec() -> "SimpleNamespace":  # noqa: F821
+    from types import SimpleNamespace
+
+    return SimpleNamespace(
+        kind="ratio",
+        numerator="plans approved by security holders",
+        denominator="outstanding options",
+        base_period=None,
+    )
+
+
+def test_ratio_cross_doc_guard_all_foreign(monkeypatch) -> None:
+    """分母候选全部异文档 → 清空，total 回退只注入分子同文档合计行。"""
+    from verifin.core import nodes as nodes_mod
+    from verifin.core.nodes import _ratio_candidates
+
+    # 屏蔽父文档补全：守卫单测聚焦检索 chunk 直扫路径
+    monkeypatch.setattr(nodes_mod, "_call_tool", lambda name, **kw: [])
+
+    out = _ratio_candidates(_ratio_state(), _ratio_spec())
+    num_values = [c.value for c in out["num"]]
+    den_values = [c.value for c in out["den"]]
+
+    assert 1211143 in num_values            # 分子：CME 行标签命中
+    assert 766801 not in den_values         # 跨文档分母被守卫剔除
+    assert 1217121 in den_values            # 同文档 total 行回退注入
+    for c in out["den"]:
+        assert c.chunk_id == "cme-1"        # 分母全部来自分子同文档
+
+
+def test_ratio_cross_doc_guard_mixed(monkeypatch) -> None:
+    """分母候选混合（同文档 + 异文档）→ 只保留同文档候选。"""
+    from types import SimpleNamespace
+
+    from verifin.core import nodes as nodes_mod
+    from verifin.core.nodes import _ratio_candidates
+
+    monkeypatch.setattr(nodes_mod, "_call_tool", lambda name, **kw: [])
+
+    state = _ratio_state()
+    # CME 侧补一个弱分母命中（同文档 prose 值），模拟混合桶
+    state["retrieved_docs"][0] = dict(state["retrieved_docs"][0])
+    state["retrieved_docs"][0]["content"] = (
+        "a total of 42456 outstanding options were outstanding under all plans\n"
+        + _CME_TABLE
+    )
+
+    out = _ratio_candidates(state, _ratio_spec())
+    den_values = [c.value for c in out["den"]]
+
+    assert 42456 in den_values              # 同文档候选保留
+    assert 766801 not in den_values         # 异文档候选剔除
+    for c in out["den"]:
+        assert c.chunk_id == "cme-1"
