@@ -97,6 +97,7 @@ def main() -> int:
         providers = []
         if args.llm_bridge or args.llm_api_key:
             from verifin.llm_provider import make_llm_stack
+            from verifin.core.nodes import set_entity_link_provider
 
             llm_planner, llm_programmer, providers = make_llm_stack(
                 mode=args.llm_mode,
@@ -105,6 +106,19 @@ def main() -> int:
                 api_base=args.llm_api_base,
                 model=args.llm_model,
             )
+            # Phase 12.5b：规则实体投票弃权时，LLM 实体链接语义回退
+            # （复用 programmer 通道 provider——programmer/planner 关闭时
+            #  也需要独立实例，这里建一个专用 linker）
+            from verifin.llm_provider import OpenAICompatLLM, BridgedLLM
+
+            link_prov = (
+                OpenAICompatLLM(args.llm_api_key, base_url=args.llm_api_base,
+                                model=args.llm_model, kind="entity_link")
+                if args.llm_api_key
+                else BridgedLLM(args.llm_bridge, kind="entity_link")
+            )
+            providers.append(link_prov)
+            set_entity_link_provider(link_prov.complete)
             print(
                 f"LLM 已注入（bridge={args.llm_bridge}, mode={args.llm_mode}，"
                 f"planner={'on' if llm_planner else 'off'}, "

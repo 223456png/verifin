@@ -306,3 +306,59 @@ def test_primary_entity_contaminated_pool_abstains() -> None:
     docs = [_doc("SYY", 0), _doc("SYY", 1), _doc("GIS", 2), _doc("GIS", 3),
             _doc("GIS", 4), _doc("GIS", 5), _doc("ZBH", 6), _doc("ZBH", 7)]
     assert _resolve_primary_entity(docs) is None
+
+
+# ---------------------------------------------------------------------------
+# Phase 12.5b LLM 辅助实体链接（规则投票弃权时的语义回退）
+# ---------------------------------------------------------------------------
+
+def _link_docs() -> list:
+    def _doc(name: str) -> dict:
+        return {"chunk_id": f"{name}-1", "content": f"{name} annual report revenue 2015 was 100"}
+    return [_doc("ZBH"), _doc("SYY"), _doc("GIS")]
+
+
+def test_entity_link_llm_pick(monkeypatch) -> None:
+    """LLM 选中候选实体 → 返回该实体；缓存生效（同输入只调一次）。"""
+    from verifin.core import nodes as nodes_mod
+
+    calls = []
+
+    def fake_complete(prompt: str) -> str:
+        calls.append(prompt)
+        return '{"entity": "ZBH"}'
+
+    monkeypatch.setattr(nodes_mod, "_entity_link_provider", fake_complete)
+    monkeypatch.setattr(nodes_mod, "_ENTITY_LINK_CACHE", {})
+    e1 = nodes_mod._llm_resolve_primary_entity(_link_docs(), "what percent of total contractual obligations")
+    e2 = nodes_mod._llm_resolve_primary_entity(_link_docs(), "what percent of total contractual obligations")
+    assert e1 == "ZBH" and e2 == "ZBH"
+    assert len(calls) == 1  # 缓存命中
+
+
+def test_entity_link_llm_hallucination_rejected(monkeypatch) -> None:
+    """LLM 返回候选之外的实体（幻觉）→ 拒绝，返回 None。"""
+    from verifin.core import nodes as nodes_mod
+
+    monkeypatch.setattr(nodes_mod, "_entity_link_provider", lambda p: '{"entity": "FAKE CORP"}')
+    monkeypatch.setattr(nodes_mod, "_ENTITY_LINK_CACHE", {})
+    assert nodes_mod._llm_resolve_primary_entity(_link_docs(), "q") is None
+
+
+def test_entity_link_llm_null_and_garbage(monkeypatch) -> None:
+    """LLM 返回 null / 非 JSON → None（静默降级，不抛出）。"""
+    from verifin.core import nodes as nodes_mod
+
+    monkeypatch.setattr(nodes_mod, "_ENTITY_LINK_CACHE", {})
+    monkeypatch.setattr(nodes_mod, "_entity_link_provider", lambda p: '{"entity": null}')
+    assert nodes_mod._llm_resolve_primary_entity(_link_docs(), "q") is None
+    monkeypatch.setattr(nodes_mod, "_entity_link_provider", lambda p: '不是 JSON 的废话')
+    assert nodes_mod._llm_resolve_primary_entity(_link_docs(), "q") is None
+
+
+def test_entity_link_disabled(monkeypatch) -> None:
+    """未注册 provider → 直接 None（纯规则路径零开销）。"""
+    from verifin.core import nodes as nodes_mod
+
+    monkeypatch.setattr(nodes_mod, "_entity_link_provider", None)
+    assert nodes_mod._llm_resolve_primary_entity(_link_docs(), "q") is None

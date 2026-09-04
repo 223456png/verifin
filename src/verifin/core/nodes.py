@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 import uuid
 from datetime import datetime, timezone
@@ -446,6 +447,94 @@ def _resolve_primary_entity(docs: list) -> Optional[str]:
     return best
 
 
+# ---------------------------------------------------------------------------
+# Phase 12.5b：LLM 辅助实体链接——规则投票弃权时的语义回退
+# ---------------------------------------------------------------------------
+
+_entity_link_provider: Optional[Callable[[str], str]] = None
+_ENTITY_LINK_CACHE: Dict[str, Optional[str]] = {}
+
+
+def set_entity_link_provider(provider: Optional[Callable[[str], str]]) -> None:
+    """注册 LLM 实体链接 provider（complete(prompt)->str；None 关闭）。"""
+    global _entity_link_provider
+    _entity_link_provider = provider
+
+
+_ENTITY_LINK_PROMPT = """你是金融文档问答的实体链接器。问题是财报数值问题（通常不含
+公司名），【候选】是检索到的公司文档（公司名 + 内容摘要）。判断哪家公司的文档与
+问题最相关——即问题所问的指标最可能出现在哪家公司的财报表格/段落中。
+
+判断依据：表格类型与行项目是否匹配问题的指标（如"合同义务中长期债务占比"应对应
+含 contractual obligations 明细行的文档）；期间一致性；上下文语义（而非词面重叠）。
+
+只输出 JSON：{{"entity": "公司名"}} 或 {{"entity": null}}（都不相关时）
+
+【问题】{query}
+【候选】
+{candidates}"""
+
+
+def _llm_resolve_primary_entity(docs: list, query: str) -> Optional[str]:
+    """LLM 实体链接：从候选文档解析主公司（带缓存与严格结果校验）。
+
+    仅在规则投票弃权后调用。校验：返回实体必须与候选抽取实体精确匹配
+    （防幻觉编造公司名）；任何异常/解析失败 → None（回退无门控行为）。
+    """
+    if _entity_link_provider is None:
+        return None
+    import hashlib
+
+    from verifin.tools.verifier import _DEFAULT_VERIFIER
+
+    cands: List[Dict[str, str]] = []
+    seen: set = set()
+    for rank, doc in enumerate([d for d in (docs or []) if isinstance(d, dict)][:10]):
+        if not isinstance(doc, dict):
+            continue
+        try:
+            ev = _DEFAULT_VERIFIER.extractor.extract(doc)
+        except Exception:  # noqa: BLE001
+            continue
+        entity = str(getattr(ev, "entity", "") or "").strip()
+        if not entity or entity in seen:
+            continue
+        seen.add(entity)
+        meta = doc.get("metadata") if isinstance(doc.get("metadata"), dict) else {}
+        cands.append({
+            "entity": entity,
+            "doc_id": str(meta.get("doc_id") or ""),
+            "snippet": str(doc.get("content") or "")[:220],
+        })
+    if len(cands) < 2:
+        return None
+    cache_key = hashlib.sha1(
+        (query + "|" + "|".join(c["entity"] for c in cands)).encode()
+    ).hexdigest()
+    if cache_key in _ENTITY_LINK_CACHE:
+        return _ENTITY_LINK_CACHE[cache_key]
+
+    lines = "\n".join(
+        f"{i+1}. 实体={c['entity']} | doc={c['doc_id']} | {c['snippet']}"
+        for i, c in enumerate(cands)
+    )
+    raw = _entity_link_provider(
+        _ENTITY_LINK_PROMPT.format(query=query, candidates=lines)
+    )
+    entity: Optional[str] = None
+    try:
+        m = re.search(r"\{.*?\}", raw or "", re.DOTALL)
+        if m:
+            data = json.loads(m.group(0))
+            pick = str(data.get("entity") or "").strip()
+            if pick and pick.lower() in {c["entity"].lower() for c in cands}:
+                entity = next(c["entity"] for c in cands if c["entity"].lower() == pick.lower())
+    except Exception:  # noqa: BLE001 - 解析失败回退无门控
+        entity = None
+    _ENTITY_LINK_CACHE[cache_key] = entity
+    return entity
+
+
 def verifier_node(state: Any) -> dict:
     """四要素证据校验（真实 Verifier，经 ``verify_claim_batch`` 工具）。
 
@@ -474,10 +563,12 @@ def verifier_node(state: Any) -> dict:
     if not claim:
         claim = extract_claim(task) if task else {}
     docs = [doc for doc in (s.get("retrieved_docs") or []) if isinstance(doc, dict)]
-    # Phase 12.5 实体门控：claim 缺 entity 时从检索结果注入主实体（多数票），
-    # 激活实体硬校验——跨公司 chunk 在实体要素上 FAIL，通过池精度提升
+    # Phase 12.5 实体门控：claim 缺 entity 时先规则投票，弃权后 LLM 实体
+    # 链接语义回退（12.5b）——跨公司 chunk 在实体要素上 FAIL，通过池精度提升
     if isinstance(claim, dict) and not claim.get("entity"):
         primary = _resolve_primary_entity(docs)
+        if not primary:
+            primary = _llm_resolve_primary_entity(docs, _latest_user_query(s))
         if primary:
             claim = {**claim, "entity": primary}
     # 会话偏好传入仲裁（Phase 6：偏好来源可信度加权）
