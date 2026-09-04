@@ -29,6 +29,10 @@ from verifin.retrieval.fusion import RRFusion, weighted_fuse
 from verifin.retrieval.hybrid_retriever import HybridRetriever
 from verifin.retrieval.reranker import Reranker
 from verifin.schemas import DocumentChunk, SearchResultSet
+
+# Phase 12.2：conftest autouse 夹具会在每个测试运行时整体替换 _load_model；
+# 模块导入发生在 collection 阶段（早于夹具），此处保存真实实现供 8.2b/8.2c 恢复
+_REAL_LOAD_MODEL = Reranker._load_model
 from verifin.tools.retriever import get_retriever, retrieve, set_retriever
 
 
@@ -118,6 +122,79 @@ def test_reranker_available() -> None:
     out = reranker.rerank("q", [("a", "text a"), ("b", "text b")], top_k=2)
     assert [cid for cid, _ in out] == ["a", "b"]
     assert all(score == 0.0 for _, score in out)
+
+
+# 8.2b Phase 12.2 失败缓存：加载失败一次后，后续 rerank 不再重试加载
+# （根因：HF SSL 阻断时 hub 内部 5×8s 重试，每次检索重跑 _load_model
+# 卡 ~40s，100 样本 34 分钟）。此处恢复真实 _load_model 并注入抛错的
+# fake sentence_transformers，验证多次 rerank 只尝试加载一次。
+def test_reranker_load_failure_cached(monkeypatch) -> None:
+    import sys
+    import types
+
+    # conftest autouse 夹具已把 _load_model 整体 mock 掉 → 恢复真实实现
+    # （_REAL_LOAD_MODEL 在 collection 阶段保存的类定义原件）
+    monkeypatch.setattr(Reranker, "_load_model", _REAL_LOAD_MODEL)
+
+    fake_st = types.ModuleType("sentence_transformers")
+
+    class _Boom:
+        calls = 0
+
+        def __init__(self, *_args, **_kwargs):
+            _Boom.calls += 1
+            raise ConnectionError("SSL EOF (simulated HF unreachable)")
+
+    fake_st.CrossEncoder = _Boom
+    monkeypatch.setitem(sys.modules, "sentence_transformers", fake_st)
+
+    reranker = Reranker()
+    outs = [reranker.rerank("q", [("a", "x"), ("b", "y")], top_k=2) for _ in range(3)]
+    assert reranker.available is False
+    assert reranker._load_attempted is True
+    # 三次都快速透传（零分原序），且模型构造只被尝试 1 次
+    for out in outs:
+        assert [cid for cid, _ in out] == ["a", "b"]
+        assert all(score == 0.0 for _, score in out)
+    assert _Boom.calls == 1
+
+
+# 8.2c Phase 12.2 成功路径：加载成功后 rerank 多次不重复构造模型
+def test_reranker_load_once_on_success(monkeypatch) -> None:
+    import sys
+    import types
+
+    monkeypatch.setattr(Reranker, "_load_model", _REAL_LOAD_MODEL)
+
+    fake_st = types.ModuleType("sentence_transformers")
+
+    class _FakeModel:
+        calls = 0
+
+        def __init__(self, *_args, **_kwargs):
+            _FakeModel.calls += 1
+
+        def predict(self, pairs, show_progress_bar=False):
+            return [float(len(p[1])) for p in pairs]  # 按内容长度给分
+
+    fake_st.CrossEncoder = _FakeModel
+    monkeypatch.setitem(sys.modules, "sentence_transformers", fake_st)
+
+    reranker = Reranker()
+    reranker.rerank("q", [("a", "xxxx"), ("b", "yy")], top_k=2)
+    reranker.rerank("q2", [("a", "zzz")], top_k=1)
+    assert reranker.available is True
+    assert _FakeModel.calls == 1  # 只构造一次，后续复用
+
+
+# 8.2d Phase 12.2 RERANKER_MODEL 环境变量：支持本地模型目录离线加载
+def test_reranker_model_env_override(monkeypatch) -> None:
+    monkeypatch.setenv("RERANKER_MODEL", "/opt/models/ce-local")
+    assert Reranker().model_name == "/opt/models/ce-local"
+    monkeypatch.delenv("RERANKER_MODEL")
+    assert Reranker().model_name == Reranker.DEFAULT_MODEL
+    # 显式传参优先级最高
+    assert Reranker("other/model").model_name == "other/model"
 
 
 # 8.3 HybridRetriever.search → 返回 top_k 条且字段完整
