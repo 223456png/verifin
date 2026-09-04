@@ -249,6 +249,19 @@ LLM 规划层（失败降级规则 planner）、多跳 QA 合成管线（四重�
    数据不可信），上表数字全部为 DeepSeek 直连完整跑出；检索层残余失败
    4 例、锚定精度仍是剩余 calculation_error 的主因。
 
+## Phase 12.4（2026-09-04，MCP Server + LLM-as-judge 评测体系）
+
+1. **MCP Server**：FastMCP stdio 服务四工具只读暴露（retrieve /
+   expand_document / verify_claim / calculate），协议级冒烟六步全通；
+   任何 MCP 客户端可复用 VeriFin 检索+校验+计算能力
+2. **LLM-as-judge**（DeepSeek，40 样本子集，0 调用失败）：faithfulness +
+   relevancy 逐样本判定，证据锚定四要素校验通过池
+3. **分层发现**：答错 27 题 faithfulness **0%**（噪声证据放行后算错值——
+   verifier 精度弱点的直接实证）；答对 11 题 36%（judge 证据切片 6/32
+   偏窄）；judge 与 EM 一致性 82%
+4. **诚实边界**：judge 全量 100 样本受沙箱限流中断，40 样本子集口径；
+   忠实性按"结论可由证据数值算术推导"判定（PoT 架构正确定义）
+
 ## 数字回溯索引
 
 | 数字 | 报告 |
