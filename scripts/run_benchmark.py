@@ -40,6 +40,20 @@ def parse_args() -> argparse.Namespace:
         help="真实数据集的预构建索引目录（build_index.py 产物：indexes/ chroma_db/ *.db）",
     )
     parser.add_argument("--resume", action="store_true", help="从断点续跑")
+    parser.add_argument(
+        "--llm-bridge", default=None,
+        help="LLM 桥接服务 base_url（如 http://127.0.0.1:8642）；与 --llm-api-key 二选一",
+    )
+    parser.add_argument(
+        "--llm-api-key", default=None,
+        help="OpenAI 兼容端点直连的 API key（配合 --llm-api-base/--llm-model）",
+    )
+    parser.add_argument("--llm-api-base", default="https://api.deepseek.com")
+    parser.add_argument("--llm-model", default="deepseek-chat")
+    parser.add_argument(
+        "--llm-mode", default="both", choices=["both", "planner", "programmer"],
+        help="LLM 注入范围：both=planner+程序生成 / planner / programmer（单变量消融）",
+    )
     return parser.parse_args()
 
 
@@ -79,6 +93,23 @@ def main() -> int:
         )
         results = runner.run_all(max_samples=args.max_samples, resume=args.resume)
     else:
+        llm_planner = llm_programmer = None
+        providers = []
+        if args.llm_bridge or args.llm_api_key:
+            from verifin.llm_provider import make_llm_stack
+
+            llm_planner, llm_programmer, providers = make_llm_stack(
+                mode=args.llm_mode,
+                bridge_url=args.llm_bridge,
+                api_key=args.llm_api_key,
+                api_base=args.llm_api_base,
+                model=args.llm_model,
+            )
+            print(
+                f"LLM 已注入（bridge={args.llm_bridge}, mode={args.llm_mode}，"
+                f"planner={'on' if llm_planner else 'off'}, "
+                f"programmer={'on' if llm_programmer else 'off'}）"
+            )
         runner = BenchmarkRunner(
             config_name="full",
             dataset=dataset,
@@ -86,8 +117,20 @@ def main() -> int:
             output_dir=output_dir,
             multi_turn=args.multi_turn,
             index_dir=Path(args.index_dir) if args.index_dir else None,
+            llm_planner=llm_planner,
+            llm_programmer=llm_programmer,
         )
         results = {"full": runner.run_all(max_samples=args.max_samples, resume=args.resume)}
+        if providers:
+            # 按 kind 分文件落盘，避免互相覆盖
+            for p in providers:
+                stats_path = output_dir / f"llm_calls_{p.kind}.json"
+                p.dump_stats(stats_path)
+                print(
+                    f"LLM 调用统计[{p.kind}]: {p.summary()['ok']}/"
+                    f"{p.summary()['calls']} 成功，平均 {p.summary()['avg_latency_ms']:.0f}ms"
+                    f" → {stats_path}"
+                )
 
     summary = _build_summary(args, results, dataset)
     report_text = ReportGenerator(output_dir).generate(summary)

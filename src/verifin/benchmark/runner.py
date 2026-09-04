@@ -111,11 +111,19 @@ def _memory_saver():
         return InMemorySaver()
 
 
-def build_benchmark_graph(config: Dict[str, bool]):
-    """按消融配置构建图；完整配置 == 生产图，其余为临时变体。"""
+def build_benchmark_graph(
+    config: Dict[str, bool],
+    llm_planner=None,
+    llm_programmer=None,
+):
+    """按消融配置构建图；完整配置 == 生产图，其余为临时变体。
+
+    ``llm_planner`` / ``llm_programmer``（Phase 12.3）透传给生产图——
+    消融变体（非 FULL_CONFIG）不含 LLM 路径，与既有数字口径一致。
+    """
     config = dict(config)
     if config == FULL_CONFIG:
-        return build_agent_graph()
+        return build_agent_graph(llm_planner=llm_planner, llm_programmer=llm_programmer)
 
     enable_verifier = bool(config.get("verifier", True))
     enable_replanner = bool(config.get("replanner", True)) and enable_verifier
@@ -290,6 +298,8 @@ class BenchmarkRunner:
         multi_turn: bool = False,
         checkpoint_every: int = 10,
         index_dir: Optional[Path] = None,
+        llm_planner=None,
+        llm_programmer=None,
     ) -> None:
         self.config_name = config_name
         self.dataset = dataset
@@ -312,7 +322,9 @@ class BenchmarkRunner:
                 "数据集无可索引语料且未指定 --index-dir；真实数据集请先运行 "
                 "scripts/build_index.py --data-dir <dir> 构建索引，再经 --index-dir 指定"
             )
-        self.graph = build_benchmark_graph(self.config)
+        self.graph = build_benchmark_graph(
+            self.config, llm_planner=llm_planner, llm_programmer=llm_programmer
+        )
         register_builtin_tools()
         _register_retrieve_tool(self.env, dense=bool(config.get("dense", True)))
 
