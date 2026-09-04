@@ -93,10 +93,13 @@ class _BaseProvider:
 class BridgedLLM(_BaseProvider):
     """本地桥接端点：``POST {base_url}/complete {"prompt"} → {"text"}``。"""
 
-    def __init__(self, base_url: str = "http://127.0.0.1:8642", **kw) -> None:
+    def __init__(
+        self, base_url: str = "http://127.0.0.1:8642",
+        kind: str = "llm_bridge", **kw,
+    ) -> None:
         super().__init__(**kw)
         self.base_url = base_url.rstrip("/")
-        self.kind = "llm_bridge"
+        self.kind = kind
 
     def _post(self, payload: dict) -> str:
         body = json.dumps({"prompt": payload["prompt"]}).encode()
