@@ -277,3 +277,32 @@ def test_ratio_cross_doc_guard_mixed(monkeypatch) -> None:
     assert 766801 not in den_values         # 异文档候选剔除
     for c in out["den"]:
         assert c.chunk_id == "cme-1"
+
+
+# ---------------------------------------------------------------------------
+# Phase 12.5 实体门控：_resolve_primary_entity 排名加权投票
+# ---------------------------------------------------------------------------
+
+def test_primary_entity_clear_majority() -> None:
+    """金标文档占 top 检索明显多数 → 注入其自报实体。"""
+    from verifin.core.nodes import _resolve_primary_entity
+
+    def _doc(name: str, rank: int) -> dict:
+        return {"chunk_id": f"{name}-{rank}", "content": f"{name} annual report revenue 2015 was 100"}
+
+    docs = [_doc("CME", 0), _doc("CME", 1), _doc("CME", 2),
+            _doc("GPN", 3), _doc("GIS", 4)]
+    assert _resolve_primary_entity(docs) == "CME"
+
+
+def test_primary_entity_contaminated_pool_abstains() -> None:
+    """噪声同构表混排、无明显多数 → 放弃注入（宁缺勿错）。"""
+    from verifin.core.nodes import _resolve_primary_entity
+
+    def _doc(name: str, rank: int) -> dict:
+        return {"chunk_id": f"{name}-{rank}", "content": f"{name} annual report revenue 2015 was 100"}
+
+    # [43] 实测形态：SYY/GIS 混排压过金标 ZBH，加权票数接近 → 弃权
+    docs = [_doc("SYY", 0), _doc("SYY", 1), _doc("GIS", 2), _doc("GIS", 3),
+            _doc("GIS", 4), _doc("GIS", 5), _doc("ZBH", 6), _doc("ZBH", 7)]
+    assert _resolve_primary_entity(docs) is None
