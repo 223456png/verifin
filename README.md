@@ -121,14 +121,16 @@ VeriFin 的答案：**以证据校验为中心的 Agent 循环** —— 检索 �
 
 ### 真实 FinQA test（100 样本抽样）
 
-| 指标 | Phase 8 | Phase 9 | Phase 10 | Phase 11 | 提升 |
-|---|---|---|---|---|---|
-| 答案 EM | 1.0% | 6.0% | 7.0% | **8.0%** | **8×** |
-| 模板可检测子集 EM | — | 24.0% | 18.4% | **21.1%** | — |
-| PoT 计算子集规模 | — | 25 题 | **38 题** | 38 题 | +13（ratio 模板） |
-| 文档级召回 | 48% | 56% | 56% | **88.0%** | **+40 pp** |
+| 指标 | Phase 8 | Phase 9 | Phase 10 | Phase 11 | Phase 12 | 提升 |
+|---|---|---|---|---|---|---|
+| 答案 EM | 1.0% | 6.0% | 7.0% | 8.0% | **21.0%** | **21×** |
+| 模板可检测子集 EM | — | 24.0% | 18.4% | 21.1% | **36.8%** | — |
+| 程序可检测规模 | — | 25 题 | 38 题 | 38 题 | **57 题** | +19（ratio 变体 + average） |
+| 文档级召回 | 48% | 56% | 56% | **88.0%** | 88.0% | **+40 pp** |
 
 **Phase 11 检索召回修复（+32 pp doc recall）**：归因诊断（`scripts/diagnose_recall.py` 六组对照 + `scripts/trace_gold_loss.py` 44 失败样本逐个跑图追踪）发现检索层本身 88%，端到端 56% 的损耗 59% 来自"四要素校验失败 chunk 被永久拉黑后**从证据池驱逐**"（verifier 对每个子任务按各自 claim 重新校验，chunk 在子任务 A 失败不代表在子任务 B 下无价值）。修复四件套：①排除语义修正（只防新检索重复命中、不驱逐历史证据）②表格 chunk 豁免（`is_table` 标记，四要素对表格天然过严）③replanner 原地打转终止（重复子任务视为无新信号）④端到端切 bge 索引（`make benchmark-finqa`）。EM 净 +2/-1（43/72 新对，73 诚实披露为更大证据池下 ratio 锚定变化）。
+
+**Phase 12 程序覆盖扩展 + 12.2 跨文档污染守卫（EM 8.0% → 21.0%）**：①句式扩展——ratio_of_to / pct_of_to / as_pct_of / hyphen_ratio / ROI-return 关键词 + average 年份区间模板，100 样本程序可检测子集 38 → 57 题，全测 1147 六族句式未检出 **122 → 9（-93%**，设计目标 ≥60%）；②v12 引入的三例回归逐样本复现（`scripts/repro_regressions.py`）定位到**跨公司同构表污染**——CME 题召回 GPN 股权计划表，分母短语命中其列头/行标签锚到异公司值 766801（正确分母为同表 total 行 1217121），`_ratio_candidates` 新增跨文档污染守卫：分母候选与分子最优锚定不同文档 → 剔除异文档候选，清空后 total 行回退限定分子同文档；③reranker 失败缓存（HF 不可达时每进程只尝试一次加载，防 hub 内部 5×8s 重试 × 每次检索的 40s 级阻塞，此前 100 样本评测被拖至 34 分钟）+ `RERANKER_MODEL` 环境变量支持本地模型目录离线加载。**同降级 reranker 口径**（与 v11/v12 基线一致）3/3 回归样本修复，错误分布 calculation_error 38 → 33、verifier_reject 29 → 26，EM 21.0%（未修复 v12 为 12.0%）。198 项测试全绿。复现：`HF_HUB_OFFLINE=1 .venv/bin/python scripts/run_benchmark.py --dataset finqa --data-dir ./data/finqa --max-samples 100 --index-dir ./bge_env --output ./results`。
 
 **答案类型分解**（诚实口径）：提取型 4% / 推导型 93%（需 program 算术）/ 布尔型 3%。确定性模板覆盖 growth_pct / difference / cross_entity_diff / argmax_relay / **ratio**（"what percentage of X are Y"，FinQA test 占 ~17%）五类。Phase 10 ratio 模板在 100 样本上检出执行 13 题（此前 0）。Phase 10.1 锚定改进（年份 token / "after \<year\>"→thereafter 行 / 正文脚注扫描 / 分母 total 行兜底 / 列一致性 / 负值剪枝）后，**理想检索口径**（gold 文档全文直接喂给执行器，剥离检索层）ratio 锚定精度 **2/13 → 7/13**。复现：`scripts/verify_ratio_ideal.py`。LLM 程序生成路径（table_sum / exp_avg / 多步算术链）基础设施就绪（DSL 执行器 + 校验 + 降级），未接真实 provider 全量评测（无 API key 不虚报数字），见 Roadmap。
 
@@ -259,6 +261,7 @@ src/verifin/
 
 - [x] **Phase 10**：ratio 比率模板（短语锚定，FinQA test 占 ~17% 的题型，EM 6.0% → 7.0%）+ FinQA DSL 多步执行器（`#N` 引用 / table_sum / table_average）+ 可插拔 LLM 程序生成器（结构校验 + 失败降级，mock provider 单测锁定语义）；Phase 10.1 ratio 锚定改进（年份 token / thereafter 行 / 正文脚注扫描 / 分母 total 行兜底 / 列一致性 / 负值剪枝，理想检索口径 2/13 → 7/13）
 - [x] **Phase 11**：检索召回修复——损耗归因（检索层 88% vs 端到端 56%，44 失败样本逐个跑图追踪：59% 是 exclude 拉黑驱逐 gold）+ 排除语义修正（不驱逐历史证据）+ 表格 chunk 豁免 + replanner 打转终止 + bge 索引端到端切换。doc recall **56% → 88.0%（+32 pp）**、EM **7.0% → 8.0%**、184 项测试全绿
+- [x] **Phase 12**：程序句式覆盖扩展（ratio 5 变体 + average 年区间模板 + ROI/growth 关键词，可检测子集 38 → 57 题、全测六族未检出 122 → 9）+ 12.2 跨文档污染守卫（CME/GPN 同构表召回污染根因，分母限分子同文档 + total 回退同文档优先）+ reranker 失败缓存与 `RERANKER_MODEL` 离线路径。EM **8.0% → 21.0%**（同降级 reranker 口径）、可检测子集 EM **21.1% → 36.8%**、198 项测试全绿
 - [ ] LLM program 生成接入真实 provider 全量评测（基础设施就绪，无 API key 不虚报数字）；覆盖 FinQA 剩余 ~70% 推导型问题
 - [x] 真实语义 embedding（bge-small-en-v1.5）替换 hash-Dense（doc recall +5 pp）
 - [x] 可插拔 LLM 规划层（任意 provider，失败降级规则 planner，零外部依赖兜底）

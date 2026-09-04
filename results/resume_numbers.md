@@ -209,6 +209,29 @@ LLM 规划层（失败降级规则 planner）、多跳 QA 合成管线（四重�
   ——更大证据池下 ratio 锚定选了不同操作数）；doc recall +32pp 的收益
   尚未被 program 覆盖兑现，检索修复的红利会在后续 program 扩展中释放。
 
+## Phase 12（2026-09-04，v12 + 12.2 修复）
+
+1. **EM 8.0% → 21.0%**（100 样本，同降级 reranker 口径——与 v11/v12 基线
+   一致的可比环境；v12 未修复为 12.0%）；可检测子集 EM 21.1% → 36.8%
+2. **程序可检测子集 38 → 57 题**（100 样本）；全测 1147 六族目标句式
+   未检出 **122 → 9（-93%**，设计目标 ≥60%）
+3. **三例回归 3/3 修复**（24/43/72），根因两层：
+   - **跨公司同构表污染**（真 bug）：CME 题召回 GPN 股权计划表，分母
+     短语 "outstanding options" 命中异公司行标签 → 分母锚到 766801
+     （正确为同表 total 行 1217121）→ `_ratio_candidates` 跨文档污染
+     守卫（分母候选限分子最优锚定同文档，清空后 total 回退同文档优先）
+   - **reranker 失效伪影**：用户本地 HF SSL 阻断 → 每次检索 5×8s 重试
+     卡 40s、评测拖至 34 分钟且检索质量降级 → 失败缓存（每进程只试一次）
+     + `RERANKER_MODEL` 本地路径离线加载
+4. 错误分布：calculation_error 38 → 33、verifier_reject 29 → 26、
+   retrieval_failure 3、other 17（100 样本 79 个失败样本）
+5. 198 项测试全绿（新增 6 项：reranker 失败缓存/成功单次/env 覆盖 ×4 +
+   跨文档守卫 ×2）
+6. **诚实边界**：21.0% 与用户本地 12.0% 的差含环境差（沙箱重建 bge 索引
+   与用户本地索引的 chunk 边界可能不一致），归因证据以 3/3 回归样本修复
+   + 单测锁定 + 同环境错误分布改善为准；计算子集剩余失败仍以锚定精度
+   为主（短语与行标签零词重叠的题靠 total 回退也救不回）。
+
 ## 数字回溯索引
 
 | 数字 | 报告 |
@@ -218,6 +241,7 @@ LLM 规划层（失败降级规则 planner）、多跳 QA 合成管线（四重�
 | FinQA EM 7.0%（Phase 10）/ PoT 子集 38 题 | [results/finqa_v10/report.md](finqa_v10/report.md) |
 | ratio 理想检索 2/13→7/13（Phase 10.1） | `scripts/verify_ratio_ideal.py` + [results/finqa_v10_1/report.md](finqa_v10_1/report.md) |
 | FinQA EM 8.0% / doc recall 88.0%（Phase 11） | [results/finqa_v11/report.md](finqa_v11/report.md) + `scripts/diagnose_recall.py` + `scripts/trace_gold_loss.py` |
+| FinQA EM 21.0%（Phase 12.2）/ 六族未检出 122→9 | `results_v122_norank/report.md` + `scripts/repro_regressions.py` |
 | ConvFinQA recall 65% | [results/convfinqa_check/report.md](convfinqa_check/report.md) |
 | 检索升级 recall 81%→86% | `scripts/compare_retrieval.py`（FinQA test 100 样本实测） |
 | 多跳基准 EM 37.5%→100% | [results/multihop_check/report.md](multihop_check/report.md) |

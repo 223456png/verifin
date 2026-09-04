@@ -707,7 +707,13 @@ def _ratio_candidates(s: dict, program_spec) -> Dict[str, list]:
         for item in EvidenceExtractor.collect_total_values(content):
             total_fallback.append((item, chunk_id, penalty))
 
+    # Phase 12.2：chunk → doc 映射（跨文档污染守卫用）
+    chunk_doc: Dict[str, str] = {}
     for doc in [d for d in (s.get("retrieved_docs") or []) if isinstance(d, dict)]:
+        _meta = doc.get("metadata") if isinstance(doc.get("metadata"), dict) else {}
+        _doc_id = str(_meta.get("doc_id") or "")
+        if doc.get("chunk_id") and _doc_id:
+            chunk_doc[str(doc.get("chunk_id"))] = _doc_id
         _scan(str(doc.get("content") or ""), doc.get("chunk_id"))
 
     # 父文档补全（small-to-big）：比率题双操作数几乎总在同表，
@@ -729,15 +735,51 @@ def _ratio_candidates(s: dict, program_spec) -> Dict[str, list]:
             continue
         for chunk in expanded:
             if isinstance(chunk, dict):
+                if chunk.get("chunk_id"):
+                    chunk_doc[str(chunk.get("chunk_id"))] = str(doc_id)
                 _scan(
                     str(chunk.get("content") or ""),
                     chunk.get("chunk_id"),
                     penalty=0.25,
                 )
 
+    # Phase 12.2 跨文档污染守卫：FinQA 每题操作数必在同文档（同表）。检索
+    # 常召回其他公司的同构表（[72] 实测：CME 题召回 GPN 股权计划表，分母
+    # 短语 "outstanding options" 命中其行标签/列头 → 分母锚到异公司值，
+    # num/den 跨公司必然算错）。分母候选与分子最优候选不同文档时：
+    # 有同文档候选 → 只留同文档；全部异文档 → 判定污染清空走 total 回退。
+    # 注意取「锚定分最优」的分子（非扫描序首个——[43] 实测扫描序首个
+    # 是异文档弱命中，会把守卫的锚定文档判错）。
+    num_doc = None
+    if candidates["num"]:
+        _best_num = min(candidates["num"], key=lambda c: c.anchor_score)
+        num_doc = chunk_doc.get(_best_num.chunk_id)
+    if num_doc and candidates["den"]:
+        same_doc_den = [
+            c for c in candidates["den"]
+            if chunk_doc.get(c.chunk_id) == num_doc
+        ]
+        foreign_only = [
+            c for c in candidates["den"]
+            if chunk_doc.get(c.chunk_id) not in (None, num_doc)
+        ]
+        if same_doc_den:
+            candidates["den"] = same_doc_den
+        elif len(foreign_only) == len(candidates["den"]):
+            candidates["den"] = []
+
     # 分母短语全空 → total 行回退兜底（直接 chunk 优先于父文档补全来源）
     if not candidates["den"]:
-        for item, chunk_id, penalty in total_fallback:
+        pool = total_fallback
+        if num_doc:
+            # Phase 12.2：优先注入分子同文档的 total 行（[72] 的正确分母
+            # 即分子所在表的 "total" 行 1217121），异文档合计行不参与
+            same_doc_pool = [
+                t for t in total_fallback if chunk_doc.get(t[1]) == num_doc
+            ]
+            if same_doc_pool:
+                pool = same_doc_pool
+        for item, chunk_id, penalty in pool:
             _add("den", item, chunk_id, penalty)
     return candidates
 
