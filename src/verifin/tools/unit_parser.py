@@ -77,7 +77,7 @@ def parse_number_with_unit(text: str) -> Optional[Tuple[float, Optional[str]]]:
         return None
     rest = text[match.end():].strip()
     unit: Optional[str] = None
-    for token in _PERCENT_SIGNS:
+    for _token in _PERCENT_SIGNS:
         if rest.startswith("%"):
             unit = "%"
             break

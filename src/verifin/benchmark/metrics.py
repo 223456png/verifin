@@ -268,7 +268,7 @@ _RAGAS_STOPWORDS = frozenset({
     "as", "than", "and", "or", "its", "their", "his", "her", "it", "this",
     "that", "these", "those", "there", "here", "much", "many", "more", "most",
     "less", "least", "also", "only", "just", "company", "companies", "please",
-    "tell", "per", "was",
+    "tell", "per",
 })
 
 

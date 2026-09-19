@@ -2,15 +2,26 @@
 PY := .venv/bin/python
 PIP := .venv/bin/pip
 PORT ?= 8000
+INDEX_DIR ?= ./bge_env
 
-.PHONY: help install demo test benchmark benchmark-finqa ablation index multi-turn multihop multihop-synth clean
+.PHONY: help install lint test cover demo demo-finqa mcp index benchmark benchmark-finqa \
+        ablation multi-turn multihop multihop-synth mcp-smoke up down clean
 
 help: ## 显示所有可用命令
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
-		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
+		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
 
 install: ## 安装依赖（pip install -e ".[dev]"）
-	$(PIP) install -e ".[dev]" 2>/dev/null || pip install -e ".[dev]"
+	$(PIP) install -e ".[dev]"
+
+lint: ## 静态检查（与 CI 同款）
+	ruff check src tests
+
+test: ## 运行全部测试（200 项）
+	$(PY) -m pytest tests/ -q
+
+cover: ## 运行测试并输出覆盖率
+	$(PY) -m pytest tests/ -q --cov=verifin --cov-report=term-missing
 
 demo: ## 一键启动 Web Demo（http://127.0.0.1:$(PORT)）
 	@echo ">>> 启动 VeriFin Web Demo: http://127.0.0.1:$(PORT)"
@@ -21,8 +32,11 @@ demo-finqa: ## 用 FinQA 索引启动（需先 make index）
 	@echo ">>> 启动 VeriFin（FinQA 索引）: http://127.0.0.1:$(PORT)"
 	VERIFIN_INDEX_DIR=./indexes $(PY) -m verifin.api.app
 
-test: ## 运行全部测试（184 项）
-	$(PY) -m pytest tests/ -q
+mcp: ## 启动 MCP Server（stdio，供 Claude Desktop / Cursor 等客户端连接）
+	VERIFIN_INDEX_DIR=$(INDEX_DIR) $(PY) -m verifin.mcp.server
+
+mcp-smoke: ## MCP Server 协议级冒烟测试（需已构建索引）
+	VERIFIN_INDEX_DIR=$(INDEX_DIR) HF_HUB_OFFLINE=1 $(PY) scripts/test_mcp_server.py
 
 index: ## 构建 FinQA 索引（data/finqa → indexes/）
 	$(PY) scripts/build_index.py --dataset finqa --data-dir ./data/finqa
@@ -52,5 +66,11 @@ multihop: ## 多跳合成基准评测（16 样本：种子抽取 + 四重校验�
 multihop-synth: ## 多跳 QA 合成管线（产出基准 JSON + 校验统计）
 	$(PY) scripts/synthesize_multihop.py --output ./results/multihop_synth
 
+up: ## Docker Compose 启动（http://127.0.0.1:$(PORT)）
+	docker compose up --build -d
+
+down: ## 停止 Docker Compose 服务
+	docker compose down
+
 clean: ## 清理运行期产物（索引/缓存）
-	rm -rf .verifin_api_env chroma_db indexes verifin_metadata.db .pytest_cache
+	rm -rf .verifin_api_env chroma_db indexes verifin_metadata.db .pytest_cache .ruff_cache .coverage htmlcov

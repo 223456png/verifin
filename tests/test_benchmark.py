@@ -46,7 +46,7 @@ def test_dataset_loader(tmp_path) -> None:
     # 目录不存在 → 降级内置合成语料（20 个样本）
     synthetic = load_dataset("finqa", tmp_path / "missing")
     assert len(synthetic) == 20
-    assert getattr(synthetic, "is_synthetic") is True
+    assert synthetic.is_synthetic is True
     assert {"query", "ground_truth", "gold_evidence"} <= set(synthetic[0])
 
     # 真实 FinQA 格式（qa.question / qa.exe_ans）容错解析
@@ -56,7 +56,7 @@ def test_dataset_loader(tmp_path) -> None:
     ]
     (tmp_path / "finqa_test.json").write_text(json.dumps(records), encoding="utf-8")
     real = load_dataset("finqa", tmp_path)
-    assert getattr(real, "is_synthetic") is False
+    assert real.is_synthetic is False
     assert len(real) == 2
     assert real[0]["query"] == "What was revenue in 2024?"
     assert real[0]["ground_truth"] == "$12,000 million"

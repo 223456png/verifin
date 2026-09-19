@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import List, Optional, Tuple, Union
+from typing import List, Tuple, Union
 
 import chromadb
 
@@ -78,7 +78,7 @@ class VectorIndex:
         )
         ids = (result.get("ids") or [[]])[0]
         distances = (result.get("distances") or [[]])[0]
-        return list(zip(ids, [float(d) for d in distances]))
+        return list(zip(ids, [float(d) for d in distances], strict=False))
 
     def count(self) -> int:
         return self.collection.count()

@@ -1,0 +1,38 @@
+# 版本控制与本地环境
+.git
+.gitignore
+.github
+.mailmap
+.venv
+.venv-*
+venv
+
+# Python 缓存
+__pycache__
+*.py[cod]
+*.egg-info
+.pytest_cache
+.ruff_cache
+.coverage
+htmlcov
+
+# 运行期产物（镜像内不需要，容器内可重新生成）
+indexes
+chroma_db
+bge_env
+verifin_metadata.db
+*.db
+.verifin_api_env
+results
+
+# 数据集（真实 FinQA 不入镜像）
+data/finqa/*
+!data/finqa/sample_1.jsonl
+
+# 文档与编辑器
+docs
+*.md
+!README.md
+.idea
+.vscode
+.DS_Store

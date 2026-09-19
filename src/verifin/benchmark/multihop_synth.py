@@ -223,7 +223,7 @@ def synthesize_multihop_samples(
             years = sorted(
                 f.year for f in facts if f.company == company and f.metric == metric
             )
-            for y1, y2 in zip(years, years[1:]):
+            for y1, y2 in zip(years, years[1:], strict=False):
                 if len([s for s in samples if s["synth_type"] == "growth_chain"]) >= \
                         _MAX_PER_TYPE["growth_chain"]:
                     break

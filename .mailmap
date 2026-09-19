@@ -1,0 +1,10 @@
+# .mailmap — 统一历史提交的作者身份
+#
+# 早期提交使用了本地开发身份（verifin-dev / VeriFin Dev），
+# 此处将其映射到 GitHub 账号，使 `git shortlog -sne`、GitHub 贡献图
+# 与 `git log --format=%an` 均归并到同一作者。
+#
+# 用法：git shortlog -sne --use-mailmap
+
+223456png <147728607+223456png@users.noreply.github.com> verifin-dev <dev@verifin.local>
+223456png <147728607+223456png@users.noreply.github.com> VeriFin Dev <dev@verifin.local>

@@ -13,7 +13,7 @@ from verifin.indexing.metadata_store import MetadataStore
 from verifin.indexing.vector_index import VectorIndex
 from verifin.retrieval.fusion import RRFusion, minmax_normalize, weighted_fuse
 from verifin.retrieval.reranker import Reranker
-from verifin.schemas import DocumentChunk, SearchResult, SearchResultSet
+from verifin.schemas import SearchResult, SearchResultSet
 
 PathLike = Union[str, Path]
 
@@ -141,7 +141,7 @@ class HybridRetriever:
         raw_scores = [score for _, score in ordered]
         normalized = minmax_normalize(raw_scores, degenerate=0.0)
         results: List[SearchResult] = []
-        for (chunk_id, _), norm_score in zip(ordered, normalized):
+        for (chunk_id, _), norm_score in zip(ordered, normalized, strict=False):
             chunk = self.metadata.get(chunk_id)
             if chunk is None:
                 continue

@@ -13,7 +13,6 @@ from __future__ import annotations
 from verifin.benchmark.dataset import load_dataset, synth_chunks
 from verifin.benchmark.multihop_synth import (
     SeedFact,
-    SynthStats,
     extract_seed_facts,
     synthesize_multihop_samples,
 )

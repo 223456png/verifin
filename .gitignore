@@ -1,9 +1,23 @@
 # Python
 .venv/
+.venv-*/
+venv/
 __pycache__/
 *.py[cod]
 *.egg-info/
 .pytest_cache/
+.ruff_cache/
+
+# 测试与覆盖率产物
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# 环境变量（含密钥，切勿入库；模板见 .env.example）
+.env
+.env.local
+.env.*.local
 
 # 运行期索引产物（可再生）
 indexes/
@@ -13,9 +27,12 @@ verifin_metadata.db
 .verifin_api_env/
 bge_env/
 
-# 实验产出（Phase 7 benchmark 原始数据与报告，可再生）
+# 模型权重（本地离线加载用）
+models/
+
+# 实验产出（benchmark 原始数据与报告，可再生）
 results/*
-!results/resume_numbers.md
+!results/.gitkeep
 
 # 数据（真实数据集不入库，仅保留样例）
 data/*
@@ -23,5 +40,8 @@ data/*
 data/finqa/*
 !data/finqa/sample_1.jsonl
 
-# 系统文件
+# 编辑器与系统文件
+.idea/
+.vscode/
 .DS_Store
+Thumbs.db
