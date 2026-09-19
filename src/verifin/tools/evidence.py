@@ -692,7 +692,7 @@ class EvidenceExtractor:
             # 是表格脚注引用而非财经数值（"42749 shares were repurchased
             # ..." 前的 "( 1 )" 会以 1.0 污染分子候选且锚分并列优先）
             numeric_line = _FOOTNOTE_MARKER_RE.sub(" ", stripped)
-            for num_start, num_end, value, unit in cls._number_spans(numeric_line):
+            for _num_start, _num_end, value, unit in cls._number_spans(numeric_line):
                 out.append({
                     "value": value,
                     "unit": unit,
@@ -727,7 +727,7 @@ class EvidenceExtractor:
         out: List[dict] = []
         for table in parse_tables(content):
             header_row = table.headers[-1] if table.headers else []
-            for row_index, cells in enumerate(table.rows):
+            for _row_index, cells in enumerate(table.rows):
                 if not cells or not cells[0].strip():
                     continue
                 label = cells[0].strip()

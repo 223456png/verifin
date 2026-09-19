@@ -227,9 +227,10 @@ def _entity_match(claim_entity: str, evidence_entity: str) -> bool:
         return False
     if a == b:
         return True
-    contained = lambda needle, haystack: re.search(
-        r"(?<![a-z0-9])" + re.escape(needle) + r"(?![a-z0-9])", haystack
-    ) is not None
+    def contained(needle, haystack):
+        return re.search(
+            r"(?<![a-z0-9])" + re.escape(needle) + r"(?![a-z0-9])", haystack
+        ) is not None
     return contained(a, b) or contained(b, a)
 
 
@@ -408,7 +409,7 @@ def verify_claim_batch(
     result_dicts = [_result_to_dict(result) for result in results]
 
     # Phase 5：结果富化（数值/单位/期间/来源）→ 多文档冲突仲裁
-    for result_dict, evidence, chunk in zip(result_dicts, evidence_list, filtered_chunks):
+    for result_dict, evidence, chunk in zip(result_dicts, evidence_list, filtered_chunks, strict=False):
         metadata = (chunk.get("metadata") or {}) if isinstance(chunk.get("metadata"), dict) else {}
         result_dict["value"] = evidence.value
         result_dict["unit"] = evidence.unit

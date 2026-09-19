@@ -38,7 +38,7 @@ class DialogState:
     @classmethod
     def from_dict(cls, data: Optional[dict]) -> "DialogState":
         data = data or {}
-        known = {name for name in cls.__dataclass_fields__}
+        known = set(cls.__dataclass_fields__)
         return cls(**{key: value for key, value in data.items() if key in known})
 
 

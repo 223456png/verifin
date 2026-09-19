@@ -2,17 +2,19 @@
 """MCP server 协议级冒烟：stdio 子进程握手 → tools/list → 四工具逐个调用。
 
 用法：python scripts/test_mcp_server.py
+（需已构建索引；索引目录由 VERIFIN_INDEX_DIR 指定，默认项目根下 ./bge_env）
 """
 
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SERVER = [str(ROOT / ".venv" / "bin" / "python"), str(ROOT / "scripts" / "mcp_server.py")]
+SERVER = [sys.executable, "-m", "verifin.mcp.server"]
 
 _id = 0
 
@@ -38,9 +40,18 @@ def rpc(method: str, params: dict | None = None, notify: bool = False) -> dict |
             return resp
 
 
+_ENV = {
+    **os.environ,
+    "HF_HUB_OFFLINE": "1",
+    # 未以 -e 安装时也能以源码模式启动子进程
+    "PYTHONPATH": os.pathsep.join(
+        p for p in (str(ROOT / "src"), os.environ.get("PYTHONPATH", "")) if p
+    ),
+}
+
 proc = subprocess.Popen(
     SERVER, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-    stderr=subprocess.DEVNULL, env={**__import__("os").environ, "HF_HUB_OFFLINE": "1"},
+    stderr=subprocess.DEVNULL, env=_ENV,
 )
 
 # 1. initialize 握手

@@ -81,12 +81,12 @@ def weighted_fuse(
     if len(ranking_lists) != len(weights):
         raise ValueError("ranking_lists 与 weights 长度必须一致")
     scores: Dict[str, float] = defaultdict(float)
-    for ranking, weight in zip(ranking_lists, weights):
+    for ranking, weight in zip(ranking_lists, weights, strict=False):
         if not ranking:
             continue
         ids = [item[0] for item in ranking]
         normalized = _minmax([item[1] for item in ranking])
-        for chunk_id, value in zip(ids, normalized):
+        for chunk_id, value in zip(ids, normalized, strict=False):
             scores[chunk_id] += weight * value
     return sorted(
         scores.items(), key=lambda item: (-item[1], item[0])

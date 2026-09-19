@@ -63,7 +63,7 @@ def validate_dsl(program: str, candidate_ids: set) -> Optional[str]:
         steps = parse_dsl(program)
     except ValueError:
         return None
-    for step_index, (op, args) in enumerate(steps):
+    for step_index, (_op, args) in enumerate(steps):
         for arg in args:
             if arg in candidate_ids:
                 continue  # vN / tN 绑定（tN 仅聚合算子合法，求值时再验）

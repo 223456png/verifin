@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from verifin.tools.evidence import EvidenceExtractor
 from verifin.tools.program_executor import (
     ProgramExecutor,
     ProgramSpec,
@@ -12,7 +13,6 @@ from verifin.tools.program_executor import (
     execute_dsl,
     parse_dsl,
 )
-from verifin.tools.evidence import EvidenceExtractor
 
 
 # 1. growth 模板：双年份 + 计算关键词（含 compare-to 反序）

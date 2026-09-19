@@ -1,0 +1,29 @@
+services:
+  verifin:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: verifin:latest
+    container_name: verifin
+    ports:
+      - "${VERIFIN_PORT:-8000}:8000"
+    environment:
+      # 使用容器内路径，勿直接沿用宿主机的相对路径
+      VERIFIN_INDEX_DIR: "${VERIFIN_INDEX_DIR:-}"
+      VERIFIN_HOST: "0.0.0.0"
+      VERIFIN_PORT: "8000"
+      VERIFIN_DENSE: "${VERIFIN_DENSE:-1}"
+      HF_HUB_OFFLINE: "1"
+      # LLM 为可选增强，留空则走确定性规则路径（无需任何 API key 即可启动）
+      LLM_API_KEY: "${LLM_API_KEY:-}"
+      LLM_API_BASE: "${LLM_API_BASE:-https://api.deepseek.com}"
+      LLM_MODEL: "${LLM_MODEL:-deepseek-chat}"
+    volumes:
+      # 挂载本地索引目录（可选）：需先执行 make index 或构建 bge 索引
+      - ./bge_env:/app/bge_env:ro
+      - ./results:/app/results
+    restart: unless-stopped
+
+  # 可选：构建 bge 语义索引后用同一镜像跑端到端评测
+  # docker compose run --rm verifin python scripts/run_benchmark.py \
+  #   --dataset finqa --data-dir ./data/finqa --max-samples 100 --output ./results

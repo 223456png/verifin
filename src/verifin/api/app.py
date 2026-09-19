@@ -28,6 +28,7 @@ from verifin.core.runner import AgentRunner
 from verifin.schemas import DocumentChunk
 from verifin.tools.registry import register_builtin_tools
 
+
 def _web_dir() -> Path:
     """Web Demo 单页目录：源码 checkout（src 布局回溯到项目根）优先，cwd 兜底。"""
     here = Path(__file__).resolve()

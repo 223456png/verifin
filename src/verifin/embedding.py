@@ -11,7 +11,7 @@ import re
 from typing import List, Union
 
 import numpy as np
-from chromadb.api.types import Documents, EmbeddingFunction, Embeddings
+from chromadb.api.types import EmbeddingFunction, Embeddings
 from loguru import logger
 
 

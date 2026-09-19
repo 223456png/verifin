@@ -255,7 +255,6 @@ def test_ratio_cross_doc_guard_all_foreign(monkeypatch) -> None:
 
 def test_ratio_cross_doc_guard_mixed(monkeypatch) -> None:
     """分母候选混合（同文档 + 异文档）→ 只保留同文档候选。"""
-    from types import SimpleNamespace
 
     from verifin.core import nodes as nodes_mod
     from verifin.core.nodes import _ratio_candidates

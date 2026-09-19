@@ -133,7 +133,7 @@ def _row_equals_header(row: List[str], headers: List[List[str]]) -> bool:
     return any(
         len(row) == len(header) and all(
             _normalize_header_cell(a) == _normalize_header_cell(b)
-            for a, b in zip(row, header)
+            for a, b in zip(row, header, strict=False)
         )
         for header in headers
     )

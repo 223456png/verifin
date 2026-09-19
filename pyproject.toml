@@ -4,9 +4,31 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "verifin"
-version = "0.1.0"
-description = "VeriFin — Financial Evidence Verification Agent (Phase 1: ingestion + indexing)"
+version = "0.12.5"
+description = "VeriFin — LangGraph-based financial evidence verification agent with an MCP server, four-factor claim checks and a sandboxed PoT calculator"
+readme = "README.md"
 requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "223456png", email = "147728607+223456png@users.noreply.github.com" }]
+keywords = [
+    "llm-agent",
+    "mcp",
+    "langgraph",
+    "rag",
+    "financial-nlp",
+    "program-of-thought",
+    "evidence-verification",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 dependencies = [
     "pypdf>=4.0.0",
     "pymupdf>=1.24.0",
@@ -17,6 +39,9 @@ dependencies = [
     "loguru>=0.7.2",
     "langgraph>=0.2.0",
     "langchain-core>=0.3.0",
+    # MCP Python SDK。1.x 提供 FastMCP，2.x 更名为 MCPServer；
+    # verifin.mcp.server 在导入期自动适配两套命名，故不设上限。
+    "mcp>=1.0.0",
 ]
 
 [project.optional-dependencies]
@@ -31,10 +56,20 @@ bge-reranker = [
 ]
 dev = [
     "pytest>=8.0.0",
+    "pytest-cov>=5.0.0",
+    "ruff>=0.6.0",
     "fastapi>=0.115.0",
     "uvicorn>=0.30.0",
     "httpx>=0.27.0",
 ]
+
+[project.scripts]
+verifin-mcp = "verifin.mcp.server:main"
+
+[project.urls]
+Homepage = "https://github.com/223456png/verifin"
+Repository = "https://github.com/223456png/verifin"
+Issues = "https://github.com/223456png/verifin/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -44,3 +79,41 @@ verifin = ["inheritance_rules.json", "config/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+exclude = [".venv", "build", "dist"]
+
+[tool.ruff.lint]
+# 说明：暂不启用 `UP`（pyupgrade）规则族。该族会在全库产生约 650 处
+# `Dict[...]` → `dict[...]`、`Optional[X]` → `X | None` 的机械改写，
+# 与既有代码风格差异过大。待有独立的现代化提交时再单独启用。
+select = ["E", "F", "W", "I", "B", "C4"]
+ignore = [
+    "E501",  # 行长由 formatter 兜底，规则代码中长正则/表格字面量较多
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = [
+    "B011",   # 测试中允许 assert False
+    "B023",   # 测试夹具中的循环变量闭包
+    "B007",   # 测试中忽略的循环变量用于可读性
+]
+# evidence.py 中的锚定打分辅助函数（_score / _append / _pick 等）在循环内定义、
+# 且**当次迭代立即调用**，不逃逸出循环——B023 在此为误报。若将来这些闭包被
+# 存入列表或延后调用，必须移除本豁免并改写为参数绑定形式。
+"src/verifin/tools/evidence.py" = ["B023"]
+
+[tool.coverage.run]
+source = ["src/verifin", "verifin"]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+]

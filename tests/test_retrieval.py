@@ -29,11 +29,11 @@ from verifin.retrieval.fusion import RRFusion, weighted_fuse
 from verifin.retrieval.hybrid_retriever import HybridRetriever
 from verifin.retrieval.reranker import Reranker
 from verifin.schemas import DocumentChunk, SearchResultSet
+from verifin.tools.retriever import get_retriever, retrieve, set_retriever
 
 # Phase 12.2：conftest autouse 夹具会在每个测试运行时整体替换 _load_model；
 # 模块导入发生在 collection 阶段（早于夹具），此处保存真实实现供 8.2b/8.2c 恢复
 _REAL_LOAD_MODEL = Reranker._load_model
-from verifin.tools.retriever import get_retriever, retrieve, set_retriever
 
 
 def _chunk(doc_id: str, content: str, year: int) -> DocumentChunk:
@@ -269,7 +269,7 @@ def test_weighted_fusion() -> None:
     out = weighted_fuse(
         [[("a", 9.0), ("b", 8.0)], [("b", 7.0), ("c", 6.0)]], [0.5, 0.5], top_k=2
     )
-    assert set(cid for cid, _ in out) == {"a", "b"}
+    assert {cid for cid, _ in out} == {"a", "b"}
     # 单列表 + 单元素：归一退化 0.5 × 权重 0.5 = 0.25
     single = weighted_fuse([[("a", 9.0)], []], [0.5, 0.5], top_k=2)
     assert single == [("a", 0.25)]

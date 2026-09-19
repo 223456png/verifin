@@ -27,8 +27,8 @@ from verifin.benchmark.metrics import (
     exact_match,
     faithfulness,
     ground_truth_in_text,
-    tool_families,
     tool_f1,
+    tool_families,
 )
 from verifin.benchmark.trace import (
     classify_error,

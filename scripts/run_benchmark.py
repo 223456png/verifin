@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -41,15 +42,22 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--resume", action="store_true", help="从断点续跑")
     parser.add_argument(
-        "--llm-bridge", default=None,
-        help="LLM 桥接服务 base_url（如 http://127.0.0.1:8642）；与 --llm-api-key 二选一",
+        "--llm-bridge", default=os.environ.get("LLM_BRIDGE_URL"),
+        help="LLM 桥接服务 base_url（如 http://127.0.0.1:8642）；与 --llm-api-key 二选一。"
+             "亦可通过环境变量 LLM_BRIDGE_URL 指定",
     )
     parser.add_argument(
-        "--llm-api-key", default=None,
-        help="OpenAI 兼容端点直连的 API key（配合 --llm-api-base/--llm-model）",
+        "--llm-api-key", default=os.environ.get("LLM_API_KEY"),
+        help="OpenAI 兼容端点直连的 API key（配合 --llm-api-base/--llm-model）。"
+             "推荐通过环境变量 LLM_API_KEY 传入——命令行参数会留在 shell 历史与进程列表中",
     )
-    parser.add_argument("--llm-api-base", default="https://api.deepseek.com")
-    parser.add_argument("--llm-model", default="deepseek-chat")
+    parser.add_argument(
+        "--llm-api-base",
+        default=os.environ.get("LLM_API_BASE", "https://api.deepseek.com"),
+    )
+    parser.add_argument(
+        "--llm-model", default=os.environ.get("LLM_MODEL", "deepseek-chat")
+    )
     parser.add_argument(
         "--llm-mode", default="both", choices=["both", "planner", "programmer"],
         help="LLM 注入范围：both=planner+程序生成 / planner / programmer（单变量消融）",
