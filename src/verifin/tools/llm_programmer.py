@@ -48,6 +48,25 @@ Candidates:
 $candidates
 """)
 
+# Structured Outputs（Phase 13.1）：DSL 程序输出的 JSON Schema（OpenAI strict）。
+# 程序串内的算子 / 引用合法性仍由 validate_dsl 结构校验兜底——schema 只保证
+# 「输出是个 {"program": str}」，不放宽「LLM 输出永不直接执行」的防线。
+PROGRAMMER_RESPONSE_FORMAT = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "dsl_program",
+        "strict": True,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "program": {"type": "string", "minLength": 1},
+            },
+            "additionalProperties": False,
+            "required": ["program"],
+        },
+    },
+}
+
 _JSON_RE = re.compile(r"\{.*\}", re.DOTALL)
 
 
