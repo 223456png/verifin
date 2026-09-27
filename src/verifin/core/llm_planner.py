@@ -59,6 +59,68 @@ Question: $query
 History: $history
 """)
 
+# Structured Outputs（Phase 13.1）：plan 输出的 JSON Schema（OpenAI strict 形态）。
+# 经 OpenAICompatLLM(response_format=...) 透传给支持 json_schema 的端点——
+# 模型层保证输出结构合法，解析失败分支从「常态防御」降级为「纯保险」；
+# 不支持的端点由 provider 自动摘除回退，行为与无 schema 完全一致。
+PLANNER_RESPONSE_FORMAT = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "financial_plan",
+        "strict": True,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "sub_tasks": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "minItems": 1,
+                },
+                "claims": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "object",
+                        "properties": {
+                            "entity": {"type": "string"},
+                            "period": {"type": "string"},
+                            "metric": {"type": "string"},
+                            "definition": {"type": "string"},
+                        },
+                        "additionalProperties": False,
+                        "required": ["entity", "period", "metric", "definition"],
+                    },
+                },
+                "calculation_spec": {
+                    "anyOf": [
+                        {
+                            "type": "object",
+                            "properties": {
+                                "kind": {
+                                    "type": "string",
+                                    "enum": ["growth_pct", "difference"],
+                                },
+                                "base_period": {"type": "string"},
+                                "target_period": {"type": "string"},
+                                "metric": {"type": "string"},
+                                "entity": {"type": "string"},
+                                "reversed": {"type": "boolean"},
+                            },
+                            "additionalProperties": False,
+                            "required": [
+                                "kind", "base_period", "target_period",
+                                "metric", "entity", "reversed",
+                            ],
+                        },
+                        {"type": "null"},
+                    ],
+                },
+            },
+            "additionalProperties": False,
+            "required": ["sub_tasks", "claims", "calculation_spec"],
+        },
+    },
+}
+
 
 class LLMPlanner:
     """LLM 驱动的问题分解器（可插拔 provider，失败降级）。

@@ -125,6 +125,7 @@ class OpenAICompatLLM(_BaseProvider):
         base_url: str = "https://api.deepseek.com",
         model: str = "deepseek-chat",
         kind: str = "deepseek",
+        response_format: Optional[dict] = None,
         **kw,
     ) -> None:
         super().__init__(**kw)
@@ -132,25 +133,50 @@ class OpenAICompatLLM(_BaseProvider):
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.kind = kind
+        # Structured Outputs（Phase 13.1）：response_format 透传（OpenAI
+        # ``json_schema`` strict / DeepSeek ``json_object`` 均可）。端点
+        # 返回 400/422（不支持该参数）时自动摘除并立即重试一次——平滑回退
+        # 到普通补全，不消耗指数退避的完整重试预算。
+        self.response_format = response_format
 
     def _post(self, payload: dict) -> str:
-        body = json.dumps({
+        body: dict = {
             "model": self.model,
             "messages": [{"role": "user", "content": payload["prompt"]}],
             "temperature": 0,
-        }).encode()
+        }
+        if self.response_format:
+            body["response_format"] = self.response_format
+        data = self._request_chat(body)
+        if data is None and self.response_format:
+            # 端点拒绝 response_format（400/422）→ 摘除后立即重试一次
+            self.response_format = None
+            body.pop("response_format", None)
+            data = self._request_chat(body)
+        if data is None:
+            raise RuntimeError("chat/completions request failed")
+        return str(
+            (data.get("choices") or [{}])[0].get("message", {}).get("content") or ""
+        )
+
+    def _request_chat(self, body: dict) -> Optional[dict]:
+        """发请求返回解析后的 dict；400/422 返回 None（调用方决定回退）。"""
         req = urllib.request.Request(
-            f"{self.base_url}/chat/completions", data=body, method="POST",
+            f"{self.base_url}/chat/completions",
+            data=json.dumps(body).encode(),
+            method="POST",
             headers={
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {self.api_key}",
             },
         )
-        with urllib.request.urlopen(req, timeout=self.timeout) as resp:
-            data = json.loads(resp.read())
-        return str(
-            (data.get("choices") or [{}])[0].get("message", {}).get("content") or ""
-        )
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+                return json.loads(resp.read())
+        except urllib.error.HTTPError as exc:
+            if exc.code in (400, 422):
+                return None
+            raise
 
     def chat(
         self, messages: list, tools: Optional[list] = None
@@ -222,24 +248,41 @@ def make_llm_stack(
     api_key: Optional[str] = None,
     api_base: str = "https://api.deepseek.com",
     model: str = "deepseek-chat",
+    json_schema: bool = False,
 ) -> tuple:
     """按 mode 与通道构造 (llm_planner, llm_programmer, providers)。
 
     mode: ``both`` | ``planner`` | ``programmer``——单变量消融用。
     通道二选一：``bridge_url``（本地桥接）或 ``api_key``（OpenAI 兼容直连）。
+    json_schema: True 时给两个 provider 注入各自的 response_format
+    （Structured Outputs，Phase 13.1）——模型层保证输出为合法 JSON schema
+    结构；端点不支持时 provider 自动摘除回退，行为与 False 完全一致。
+    仅 OpenAI 兼容直连通道生效（桥接通道协议固定为纯文本）。
     """
-    from verifin.core.llm_planner import LLMPlanner
-    from verifin.tools.llm_programmer import LLMProgramGenerator
+    from verifin.core.llm_planner import LLMPlanner, PLANNER_RESPONSE_FORMAT
+    from verifin.tools.llm_programmer import (
+        LLMProgramGenerator, PROGRAMMER_RESPONSE_FORMAT,
+    )
 
-    def _make(kind: str):
+    def _make(kind: str, response_format: Optional[dict]):
         if api_key:
-            return OpenAICompatLLM(api_key, base_url=api_base, model=model, kind=kind)
+            return OpenAICompatLLM(
+                api_key, base_url=api_base, model=model, kind=kind,
+                response_format=response_format,
+            )
         if bridge_url:
             return BridgedLLM(bridge_url, kind=kind)
         return None
 
-    planner_prov = _make("planner") if mode in ("both", "planner") else None
-    prog_prov = _make("programmer") if mode in ("both", "programmer") else None
+    use_schema = json_schema and bool(api_key)
+    planner_prov = (
+        _make("planner", PLANNER_RESPONSE_FORMAT if use_schema else None)
+        if mode in ("both", "planner") else None
+    )
+    prog_prov = (
+        _make("programmer", PROGRAMMER_RESPONSE_FORMAT if use_schema else None)
+        if mode in ("both", "programmer") else None
+    )
     llm_planner = LLMPlanner(planner_prov.complete) if planner_prov else None
     llm_programmer = LLMProgramGenerator(prog_prov.complete) if prog_prov else None
     providers = [p for p in (planner_prov, prog_prov) if p is not None]

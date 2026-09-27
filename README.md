@@ -5,7 +5,7 @@
 > A financial evidence-verification agent built on LangGraph: retrieval is just the input — the real output is a **verifiable, traceable Claim-Evidence binding**, with automatic replanning when evidence fails four-factor verification. Ships with an **MCP server** so any agent client can reuse its retrieval / verification / calculation capabilities.
 
 [![CI](https://github.com/223456png/verifin/actions/workflows/ci.yml/badge.svg)](https://github.com/223456png/verifin/actions/workflows/ci.yml)
-[![tests](https://img.shields.io/badge/tests-217%20passed-brightgreen)](tests/)
+[![tests](https://img.shields.io/badge/tests-225%20passed-brightgreen)](tests/)
 [![python](https://img.shields.io/badge/python-3.10%2B-blue)](pyproject.toml)
 [![license](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
 [![MCP](https://img.shields.io/badge/MCP-server-8A2BE2)](src/verifin/mcp/server.py)
@@ -20,7 +20,7 @@
 | **技术栈** | LangGraph · ChromaDB + BM25 混合检索 · FastMCP · FastAPI · DeepSeek/OpenAI 兼容 LLM（可降级） |
 | **最硬的三个数字** | 真实 FinQA 100 样本 **EM 8.0% → 29.0%**（LLM 程序生成，净 +8 题零回归）· 文档召回 **56% → 88%** · 多跳合成基准 EM **37.5% → 100%** |
 | **最值钱的工程点** | 有**消融数据否定自己初始架构**的实证（LLM planner 反而更差），以及一个三层防御的 **PoT 安全沙箱** |
-| **217 项测试** | 全部离线可复现，默认路径零外部 API 依赖 |
+| **225 项测试** | 全部离线可复现，默认路径零外部 API 依赖 |
 
 ---
 
@@ -339,7 +339,7 @@ curl -X POST http://127.0.0.1:8000/ask \
 ### 运行测试
 
 ```bash
-python -m pytest tests/ -q          # 217 项全绿
+python -m pytest tests/ -q          # 225 项全绿
 python -m pytest tests/ --cov       # 带覆盖率
 ```
 
@@ -386,6 +386,7 @@ src/verifin/
 - [x] 多跳 QA 合成管线（种子抽取 + 四重校验，16 条基准 + 能力边界实证）
 - [x] 实体键控程序模板（cross_entity_diff / argmax_relay），多跳基准 EM 37.5% → 100%
 - [x] **Phase 13**：最小 tool-calling harness——`ToolCallingHarness` 循环 + `OpenAICompatLLM.chat`（messages+tools function calling 协议），17 项测试锁定循环语义（工具回喂 / 三停机 / 单例隔离），不动 graph 与 benchmark 一行
+- [x] **Phase 13.1**：LLM 调用接 Structured Outputs——`response_format` 透传（OpenAI `json_schema` strict 形态，planner/programmer 各自 schema：`financial_plan` / `dsl_program`），端点不支持时自动摘除回退（400/422 即摘、不吃退避预算），`--json-schema` 消融开关；模型层保证输出结构 + 手工解析降级双层防线并存，8 项测试锁定透传/回退/接线语义
 - [ ] 金融域专用 rerank（通用 ms-marco 对数值表格无益，需财务语料微调）
 - [ ] TAT-QA 数据集评测（跨表推理）
 - [ ] 重规划策略优化（多跳基准首答全对暂无触发；真实 FinQA 上有效率 50% → 目标 60%+）

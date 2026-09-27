@@ -62,6 +62,11 @@ def parse_args() -> argparse.Namespace:
         "--llm-mode", default="both", choices=["both", "planner", "programmer"],
         help="LLM 注入范围：both=planner+程序生成 / planner / programmer（单变量消融）",
     )
+    parser.add_argument(
+        "--json-schema", action="store_true",
+        help="LLM 调用启用 Structured Outputs（response_format 透传，"
+        "端点不支持时自动回退；仅 --llm-api-key 直连通道生效）",
+    )
     return parser.parse_args()
 
 
@@ -112,11 +117,13 @@ def main() -> int:
                 api_key=args.llm_api_key,
                 api_base=args.llm_api_base,
                 model=args.llm_model,
+                json_schema=args.json_schema,
             )
             print(
                 f"LLM 已注入（bridge={args.llm_bridge}, mode={args.llm_mode}，"
                 f"planner={'on' if llm_planner else 'off'}, "
-                f"programmer={'on' if llm_programmer else 'off'}）"
+                f"programmer={'on' if llm_programmer else 'off'}，"
+                f"json_schema={'on' if args.json_schema else 'off'}）"
             )
         runner = BenchmarkRunner(
             config_name="full",
