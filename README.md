@@ -5,7 +5,7 @@
 > A financial evidence-verification agent built on LangGraph: retrieval is just the input — the real output is a **verifiable, traceable Claim-Evidence binding**, with automatic replanning when evidence fails four-factor verification. Ships with an **MCP server** so any agent client can reuse its retrieval / verification / calculation capabilities.
 
 [![CI](https://github.com/223456png/verifin/actions/workflows/ci.yml/badge.svg)](https://github.com/223456png/verifin/actions/workflows/ci.yml)
-[![tests](https://img.shields.io/badge/tests-200%20passed-brightgreen)](tests/)
+[![tests](https://img.shields.io/badge/tests-217%20passed-brightgreen)](tests/)
 [![python](https://img.shields.io/badge/python-3.10%2B-blue)](pyproject.toml)
 [![license](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
 [![MCP](https://img.shields.io/badge/MCP-server-8A2BE2)](src/verifin/mcp/server.py)
@@ -20,7 +20,7 @@
 | **技术栈** | LangGraph · ChromaDB + BM25 混合检索 · FastMCP · FastAPI · DeepSeek/OpenAI 兼容 LLM（可降级） |
 | **最硬的三个数字** | 真实 FinQA 100 样本 **EM 8.0% → 29.0%**（LLM 程序生成，净 +8 题零回归）· 文档召回 **56% → 88%** · 多跳合成基准 EM **37.5% → 100%** |
 | **最值钱的工程点** | 有**消融数据否定自己初始架构**的实证（LLM planner 反而更差），以及一个三层防御的 **PoT 安全沙箱** |
-| **200 项测试** | 全部离线可复现，默认路径零外部 API 依赖 |
+| **217 项测试** | 全部离线可复现，默认路径零外部 API 依赖 |
 
 ---
 
@@ -48,6 +48,7 @@ VeriFin 的答案：**以证据校验为中心的 Agent 循环** —— 检索 �
 - **冲突仲裁与重规划**：≤2% 数值差异融合均值，>5% 强制 Replan；来源信任度加权（年报申报 > 新闻稿 > 研报）；Replan 按失败原因（缺年份 / 缺指标 / 缺实体）重构查询
 - **PoT 安全计算器 + 程序模板执行器**：`calc_expression` 三层防御的受限求值沙箱（AST 节点白名单 + `__builtins__` 置空 + SIGALRM 超时 + 幂次决定性 guard，**禁任意代码 / 禁 IO**，并有反向测试锁定）；FinQA 推导型问题（占 93%）经模板检测 → 候选数值枚举 → 单位归一 → 锚分剪枝 → 确定性求值；五类模板——年份键控（growth_pct / difference）、实体键控（cross_entity_diff 跨实体差值 / argmax_relay 三实体比较接力，实体锚定扫描取证）与短语键控（**ratio**："what percentage of X are Y" 比率题，行标签 × 问题短语双向词重叠锚定分子/分母）
 - **FinQA DSL 多步执行器 + 可插拔 LLM 程序生成（可降级）**：模板外的多步算术（table_sum / table_average / `#N` 步骤引用链）由 `LLMProgramGenerator` 经 `complete(prompt)->str` 注入任意 LLM 生成 DSL 程序，编号候选（`vN` 单值 / `tN` 值组）供其消歧；输出先过结构校验（算子白名单 / 引用越界 / 幻觉候选拒绝）再逐步 PoT 求值——**LLM 输出永不直接执行**；LLM 不可用 / 异常 / 输出非法时自动降级回确定性模板路径（默认行为与无 LLM 基线完全一致）
+- **最小 Tool-Calling Harness（模型驱动循环，~150 行零框架）**：与固定状态机互补的 `ToolCallingHarness`——LLM 按 OpenAI function calling 协议自主决定调什么工具、何时停（`OpenAICompatLLM.chat` 新增 messages+tools 支持，失败返回 None 触发 llm_error 停机）；工具层复用 `ToolRegistry`，未知工具/执行异常以 tool 消息回喂模型自主纠正，三停机条件（finished / max_turns / llm_error）防死循环。**架构定位是诚实分层**：graph 的确定性路由是 EM 基线（LLM planner 自由分解 24% < 规则混合 29% 的消融数据支撑），harness 是开放任务的能力层，不混跑评测口径
 - **会话偏好记忆**：多轮对话中抽取实体/期间/指标/来源偏好并作用于后续检索与仲裁（ConvFinQA 多轮继承）
 - **可插拔 LLM 规划层（可降级）**：`LLMPlanner` 经 `complete(prompt)->str` 注入任意 LLM provider（OpenAI / Anthropic / 本地模型），把金融问题分解为检索子任务 + 四要素 + 计算规格；LLM 不可用 / 异常 / 输出非法时自动降级到确定性规则 planner（零外部依赖兜底，测试与 demo 开箱即用）
 - **多跳 QA 合成管线**：从带来源标识的原子 chunk 抽取种子事实 → 跨文档配对（增长链 / 跨实体差值 / 三实体接力）→ 按推理深度合并 → **四重校验**（语义 / 推理 / 来源跨度 / 反伪多跳），确定性合成 2-hop/3-hop 评测基准——反伪多跳用数值级比较（年份 "2023" 不误含 "20"），实测拒掉与单文档现成数值重合的差值题
@@ -338,7 +339,7 @@ curl -X POST http://127.0.0.1:8000/ask \
 ### 运行测试
 
 ```bash
-python -m pytest tests/ -q          # 200 项全绿
+python -m pytest tests/ -q          # 217 项全绿
 python -m pytest tests/ --cov       # 带覆盖率
 ```
 
@@ -355,6 +356,8 @@ src/verifin/
 │                     #   calculator/replanner/reporter）+ 会话状态
 ├── tools/            # 无状态领域工具：四要素校验器、冲突仲裁、
 │                     #   PoT 计算器、程序模板执行器、表格解析
+├── harness.py        # 最小 tool-calling harness（模型驱动工具循环，
+│                     #   与 graph 确定性路由互补，共享 ToolRegistry）
 ├── mcp/              # MCP Server（FastMCP，四只读工具，惰性加载索引）
 ├── benchmark/        # 数据集适配、指标、消融框架、报告生成、轨迹分析
 ├── api/              # FastAPI 服务层（单线程执行器，线程安全）
@@ -382,6 +385,7 @@ src/verifin/
 - [x] 可插拔 LLM 规划层（任意 provider，失败降级规则 planner，零外部依赖兜底）
 - [x] 多跳 QA 合成管线（种子抽取 + 四重校验，16 条基准 + 能力边界实证）
 - [x] 实体键控程序模板（cross_entity_diff / argmax_relay），多跳基准 EM 37.5% → 100%
+- [x] **Phase 13**：最小 tool-calling harness——`ToolCallingHarness` 循环 + `OpenAICompatLLM.chat`（messages+tools function calling 协议），17 项测试锁定循环语义（工具回喂 / 三停机 / 单例隔离），不动 graph 与 benchmark 一行
 - [ ] 金融域专用 rerank（通用 ms-marco 对数值表格无益，需财务语料微调）
 - [ ] TAT-QA 数据集评测（跨表推理）
 - [ ] 重规划策略优化（多跳基准首答全对暂无触发；真实 FinQA 上有效率 50% → 目标 60%+）
