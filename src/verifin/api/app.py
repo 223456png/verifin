@@ -91,6 +91,7 @@ class VeriFinService:
         self._graph_factory = graph_factory or build_agent_graph
         self._lock = threading.Lock()
         self._threads: Dict[str, str] = {}
+        self._known_entities: List[str] = []
         # 单线程执行器：chromadb SQLite 线程亲和 → 装配与执行必须同线程
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="verifin-agent")
         self.graph, self.corpus = self._executor.submit(self._bootstrap).result()
@@ -100,18 +101,47 @@ class VeriFinService:
         if self._index_dir is not None:
             env = RetrievalEnvironment.from_persist_dir(Path(self._index_dir))
             corpus = {"source": "persisted-index", "path": str(self._index_dir)}
+            chunks = None
         else:
             chunks: List[DocumentChunk] = synth_chunks()
             env = RetrievalEnvironment(chunks, workspace=Path(".verifin_api_env"))
             corpus = {"source": "synthetic", "chunks": len(chunks)}
         register_builtin_tools()
         _register_retrieve_tool(env, dense=self._dense)
+        self._known_entities = self._collect_entities(chunks)
         return self._graph_factory(), corpus
+
+    @staticmethod
+    def _collect_entities(chunks) -> List[str]:
+        """从语料抽已知实体拼写表（查询归一化的大小写修正用）。
+
+        合成语料实体集中在 content 首字母大写短语；persisted 索引路径
+        暂不修正（英文问法本身可命中），后续可从 metadata 实体列扩充。
+        """
+        if not chunks:
+            return []
+        from collections import Counter
+
+        from verifin.tools.evidence import extract_entity_candidates
+
+        counter = Counter()
+        for chunk in chunks:
+            for name in extract_entity_candidates(chunk.content or ""):
+                counter[name] += 1
+        # 高频（≥2）且非单字母：语料里反复出现的实体名
+        return [name for name, n in counter.most_common(50) if n >= 2 and len(name) >= 3]
 
     # ------------------------------------------------------------------
 
     def ask(self, query: str, conversation_id: Optional[str]) -> dict:
-        """执行一轮问答（conversation_id 复用 thread_id → 多轮记忆）。"""
+        """执行一轮问答（conversation_id 复用 thread_id → 多轮记忆）。
+
+        入口先做查询归一化（中文指标词/年份/虚词 → 检索系统能懂的形态，
+        已知实体大小写修正）——仅会话层生效，benchmark 口径不受影响。
+        """
+        from verifin.query_norm import normalize_query
+
+        normalized = normalize_query(query, known_entities=self._known_entities)
         with self._lock:
             if conversation_id:
                 thread_id = self._threads.setdefault(
@@ -121,9 +151,24 @@ class VeriFinService:
                 conversation_id = uuid.uuid4().hex
                 thread_id = f"conv-{uuid.uuid4().hex}"
                 self._threads[conversation_id] = thread_id
-        final = self._executor.submit(
-            self._run, query, thread_id
-        ).result()
+        from concurrent.futures import TimeoutError as FutureTimeoutError
+        try:
+            final = self._executor.submit(
+                self._run, normalized, thread_id
+            ).result(timeout=120)
+        except FutureTimeoutError:
+            final = {
+                "messages": [
+                    {"role": "user", "content": query},
+                    {
+                        "role": "assistant",
+                        "content": (
+                            "本轮处理超时（超过 120 秒安全上限），已终止。"
+                            "请尝试更明确的问题表述（公司名 + 年份 + 指标）后重试。"
+                        ),
+                    },
+                ]
+            }
         return self._to_response(conversation_id, final)
 
     def _run(self, query: str, thread_id: str) -> dict:
@@ -159,14 +204,20 @@ class VeriFinService:
             }
         evidence: List[dict] = []
         seen_chunks = set()
+        verdict = ""
         for flag in (final.get("verify_flags") or {}).values():
             if not isinstance(flag, dict):
                 continue
+            if flag.get("decision"):
+                verdict = str(flag.get("decision"))
             for result in flag.get("results") or []:
-                if not (isinstance(result, dict) and result.get("passed")):
+                if not isinstance(result, dict):
                     continue
                 chunk_id = result.get("chunk_id")
                 if chunk_id in seen_chunks:
+                    continue
+                if result.get("value") is None and not result.get("passed"):
+                    # 无数值且未通过（缺失字段的中性记录）不进证据卡
                     continue
                 seen_chunks.add(chunk_id)
                 meta = chunk_meta.get(str(chunk_id), {})
@@ -178,6 +229,8 @@ class VeriFinService:
                     "value": result.get("value"),
                     "unit": result.get("unit"),
                     "period": result.get("period"),
+                    # 徽章跟随后端裁决：通过校验 = 采用，否则 = 排除展示
+                    "status": "accepted" if result.get("passed") else "excluded",
                 })
 
         hooks = final.get("hooks") or []
@@ -190,13 +243,16 @@ class VeriFinService:
                 for call in (final.get("tool_call_history") or [])
             ],
         }
+        dialog_state = dict(final.get("dialog_state") or {})
+        dialog_state.setdefault("session_id", conversation_id)
         return {
             "conversation_id": conversation_id,
+            "verdict": verdict or ("VERIFIED" if evidence else "REJECT"),
             "answer": answer,
             "calculation": final.get("calculation_result") or {},
             "evidence": evidence[:8],
             "trajectory": trajectory,
-            "dialog_state": final.get("dialog_state") or {},
+            "dialog_state": dialog_state,
         }
 
 

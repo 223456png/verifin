@@ -65,6 +65,70 @@ def preference_confirmation(dialog: Optional[dict]) -> Optional[str]:
     return " ".join(parts) or None
 
 
+def calculation_message(calc: dict) -> Optional[str]:
+    """PoT 计算结果 → 中文答案行；无有效计算返回 None。"""
+    if not isinstance(calc, dict) or calc.get("value") is None:
+        return None
+    base = calc.get("base") or {}
+    target = calc.get("target") or {}
+    kind = str(calc.get("kind") or "计算")
+    parts = [f"计算完成：{kind} 结果为 {calc['value']}{calc.get('unit') or ''}"]
+    if base.get("value") is not None and target.get("value") is not None:
+        parts.append(
+            f"基期 {base.get('value')}（{base.get('period') or '—'}）→ "
+            f"比较期 {target.get('value')}（{target.get('period') or '—'}）"
+        )
+    if calc.get("expression"):
+        parts.append(f"表达式 {calc['expression']}")
+    return "；".join(str(p) for p in parts) + "。"
+
+
+def success_message_lines(
+    verified_docs: list,
+    calc: Optional[dict],
+    claim: Optional[dict],
+    first_value=None,
+    first_unit: str = "",
+) -> list:
+    """成功路径的中文答案行（替代英文调试文本）。
+
+    Args:
+        verified_docs: 通过四要素校验、绑定为答案支撑的文档列表。
+        calc: PoT 计算结果（有则计算行开头）。
+        claim: 本轮问题解析出的四要素（entity/period/metric）。
+        first_value / first_unit: 首条通过校验证据的数值与单位（提取型主句用）。
+    """
+    lines: list = []
+    if calc:
+        line = calculation_message(calc)
+        if line:
+            lines.append(line)
+
+    claim = claim or {}
+    entity = claim.get("entity")
+    period = claim.get("period")
+    metric = metric_label(claim.get("metric")) if claim.get("metric") else None
+
+    entity_text = str(entity) if entity else "所查询的公司"
+    # ASCII 实体与年份之间补空格，中文实体直接拼接
+    sep = " " if entity_text and entity_text.isascii() and period else ""
+    subject = sep.join(p for p in (
+        entity_text,
+        f"{period} 年" if period else None,
+    ) if p)
+    if metric:
+        subject += f"的{metric}"
+
+    if first_value is not None:
+        lines.append(
+            f"根据通过校验的证据，{subject}为 {first_value}"
+            f"{' ' + first_unit if first_unit else ''}。"
+        )
+    else:
+        lines.append(f"已基于通过四要素校验的证据回答{subject}的问题（数值见下方证据卡）。")
+    return lines
+
+
 def friendly_message(code: str, **context: str) -> str:
     """按错误码渲染中文业务消息。
 
