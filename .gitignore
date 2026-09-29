@@ -30,9 +30,10 @@ bge_env/
 # 模型权重（本地离线加载用）
 models/
 
-# 实验产出（benchmark 原始数据与报告，可再生）
+# 实验产出（benchmark 原始数据可再生；证据报告按白名单入库）
 results/*
 !results/.gitkeep
+!results/repro_regressions/
 
 # 数据（真实数据集不入库，仅保留样例）
 data/*
@@ -46,8 +47,11 @@ data/finqa/*
 .DS_Store
 Thumbs.db
 
-# 消融结果目录（带后缀变体，报告选择性入库，原始产物不入库）
-results_*/
+# 消融结果目录：只入库 report.md 与 LLM 调用/评审摘要；full/ 逐样本产物不入库
+results_*/*
+!results_*/report.md
+!results_*/llm_calls_*.json
+!results_*/llm_judge.json
 
 # 学习练习文件（W2 模式，非项目资产）
 tests/test_w2_night3_practice.py

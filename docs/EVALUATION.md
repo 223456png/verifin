@@ -156,18 +156,24 @@ LangGraph 多智能体金融证据校验 RAG 系统：BM25 + Dense 混合检索�
 
 ## 五、数字回溯索引
 
-| 数字 | 来源 |
-|---|---|
-| 合成 100% / 消融贡献 | `results/synth_check3/report.md` |
-| FinQA EM 6.0%（Phase 9）/ det 24% / recall 56% | `results/finqa_v8/report.md` |
-| FinQA EM 7.0%（Phase 10）/ PoT 子集 38 题 | `results/finqa_v10/report.md` |
-| ratio 理想检索 2/13→7/13（Phase 10.1） | `scripts/verify_ratio_ideal.py` + `results/finqa_v10_1/report.md` |
-| FinQA EM 8.0% / doc recall 88.0%（Phase 11） | `results/finqa_v11/report.md` + `scripts/diagnose_recall.py` + `scripts/trace_gold_loss.py` |
-| FinQA EM 21.0%（Phase 12.2）/ 六族未检出 122→9 | `results_v122_norank/report.md` + `scripts/repro_regressions.py` |
-| FinQA EM 29.0%（Phase 12.3） | `scripts/summarize_llm_ablation.py` 输出 |
-| ConvFinQA recall 65% | `results/convfinqa_check/report.md` |
-| 检索升级 recall 81%→86% | `scripts/compare_retrieval.py`（FinQA test 100 样本实测） |
-| 多跳基准 EM 37.5%→100% | `results/multihop_check/report.md` |
+| 数字 | 来源 | 证据状态 |
+|---|---|---|
+| 合成 100% / 消融贡献 | `make ablation`（`results/synth_check3/`） | 未保留，可离线复现 |
+| FinQA EM 6.0%（Phase 9）/ det 24% / recall 56% | CHANGELOG「Phase 9」条目 | 沙箱产物未保留 |
+| FinQA EM 7.0%（Phase 10）/ PoT 子集 38 题 | CHANGELOG「Phase 10」条目 | 沙箱产物未保留 |
+| ratio 理想检索 2/13→7/13（Phase 10.1） | `scripts/verify_ratio_ideal.py` | 脚本入库 |
+| FinQA EM 8.0% / doc recall 88.0%（Phase 11） | CHANGELOG「Phase 11」条目 + `scripts/diagnose_recall.py` + `scripts/trace_gold_loss.py` | 沙箱产物未保留，诊断脚本入库 |
+| FinQA EM 21.0%（Phase 12.2）/ 六族未检出 122→9 | `results_v122_norank/report.md` + `scripts/repro_regressions.py` | **报告已入库** |
+| FinQA EM 29.0%（Phase 12.3，LLM 程序生成） | `results_llm_prog/report.md` + `llm_calls_programmer.json` + `llm_judge.json` | **已入库** |
+| LLM planner 消融 24.0%（Phase 12.3） | `results_llm_both/report.md` + planner/programmer 调用日志 | **已入库** |
+| FinQA EM 30.0%（Phase 12.5，实体门控） | `results_v125/report.md` | **报告已入库** |
+| Phase 12.5b 负向结果 29.0% | `results_v126/report.md` + `llm_calls_entity_link.json` | **已入库** |
+| 3/3 回归样本修复（Phase 12.2） | `results/repro_regressions/` | **已入库** |
+| ConvFinQA recall 65% | CHANGELOG「ConvFinQA」条目 | 沙箱产物未保留 |
+| 检索升级 recall 81%→86% | `scripts/compare_retrieval.py`（FinQA test 100 样本实测） | 脚本入库 |
+| 多跳基准 EM 37.5%→100% | `make multihop`（`results/multihop_check/`） | 未保留，可离线复现 |
 
-> `results/` 下的原始报告为运行期产物，未纳入版本控制（`.gitignore` 排除）；可用
-> `make benchmark` / `make multihop` 等目标复现。
+> 核心数字链（21.0 → planner 消融 24.0 → 29.0 → 30.0 → 负向 29.0）的 `report.md`
+> 与 LLM 调用/评审摘要已按白名单入库（见各 `results_*/` 目录，`full/` 逐样本原始
+> 产物体积较大未入库）；历史 Phase 的沙箱运行报告未保留，数字以 CHANGELOG 对应
+> 条目为证；标注「可复现」的实验可用 Makefile 目标离线重跑。

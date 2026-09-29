@@ -1,0 +1,375 @@
+{
+  "summary": {
+    "kind": "programmer",
+    "calls": 45,
+    "ok": 45,
+    "fail": 0,
+    "success_rate": 1.0,
+    "avg_latency_ms": 524.7,
+    "p95_latency_ms": 712.1,
+    "prompt_chars_total": 70193,
+    "resp_chars_total": 1552
+  },
+  "calls": [
+    {
+      "kind": "programmer",
+      "latency_ms": 544.6,
+      "prompt_chars": 1305,
+      "resp_chars": 29,
+      "ok": true,
+      "attempt": 1
+    },
+    {
+      "kind": "programmer",
+      "latency_ms": 648.3,
+      "prompt_chars": 1262,
+      "resp_chars": 34,
+      "ok": true,
+      "attempt": 1
+    },
+    {
+      "kind": "programmer",
+      "latency_ms": 406.8,
+      "prompt_chars": 1704,
+      "resp_chars": 34,
+      "ok": true,
+      "attempt": 1
+    },
+    {
+      "kind": "programmer",
+      "latency_ms": 474.8,
+      "prompt_chars": 1352,
+      "resp_chars": 37,
+      "ok": true,
+      "attempt": 1
+    },
+    {
+      "kind": "programmer",
+      "latency_ms": 613.0,
+      "prompt_chars": 1957,
+      "resp_chars": 33,
+      "ok": true,
+      "attempt": 1
+    },
+    {
+      "kind": "programmer",
+      "latency_ms": 712.1,
+      "prompt_chars": 2069,
+      "resp_chars": 30,
+      "ok": true,
+      "attempt": 1
+    },
+    {
+      "kind": "programmer",
+      "latency_ms": 644.8,
+      "prompt_chars": 1430,
+      "resp_chars": 53,
+      "ok": true,
+      "attempt": 1
+    },
+    {
+      "kind": "programmer",
+      "latency_ms": 536.4,
+      "prompt_chars": 1357,
+      "resp_chars": 43,
+      "ok": true,
+      "attempt": 1
+    },
+    {
+      "kind": "programmer",
+      "latency_ms": 482.2,
+      "prompt_chars": 1350,
+      "resp_chars": 33,
+      "ok": true,
+      "attempt": 1
+    },
+    {
+      "kind": "programmer",
+      "latency_ms": 414.2,
+      "prompt_chars": 1412,
+      "resp_chars": 26,
+      "ok": true,
+      "attempt": 1
+    },
+    {
+      "kind": "programmer",
+      "latency_ms": 431.9,
+      "prompt_chars": 1734,
+      "resp_chars": 30,
+      "ok": true,
+      "attempt": 1
+    },
+    {
+      "kind": "programmer",
+      "latency_ms": 581.5,
+      "prompt_chars": 1827,
+      "resp_chars": 29,
+      "ok": true,
+      "attempt": 1
+    },
+    {
+      "kind": "programmer",
+      "latency_ms": 610.6,
+      "prompt_chars": 1291,
+      "resp_chars": 28,
+      "ok": true,
+      "attempt": 1
+    },
+    {
+      "kind": "programmer",
+      "latency_ms": 400.8,
+      "prompt_chars": 1881,
+      "resp_chars": 33,
+      "ok": true,
+      "attempt": 1
+    },
+    {
+      "kind": "programmer",
+      "latency_ms": 748.1,
+      "prompt_chars": 1659,
+      "resp_chars": 35,
+      "ok": true,
+      "attempt": 1
+    },
+    {
+      "kind": "programmer",
+      "latency_ms": 440.6,
+      "prompt_chars": 2156,
+      "resp_chars": 32,
+      "ok": true,
+      "attempt": 1
+    },
+    {
+      "kind": "programmer",
+      "latency_ms": 436.1,
+      "prompt_chars": 1377,
+      "resp_chars": 29,
+      "ok": true,
+      "attempt": 1
+    },
+    {
+      "kind": "programmer",
+      "latency_ms": 578.5,
+      "prompt_chars": 1858,
+      "resp_chars": 35,
+      "ok": true,
+      "attempt": 1
+    },
+    {
+      "kind": "programmer",
+      "latency_ms": 432.0,
+      "prompt_chars": 1633,
+      "resp_chars": 26,
+      "ok": true,
+      "attempt": 1
+    },
+    {
+      "kind": "programmer",
+      "latency_ms": 442.5,
+      "prompt_chars": 1387,
+      "resp_chars": 57,
+      "ok": true,
+      "attempt": 1
+    },
+    {
+      "kind": "programmer",
+      "latency_ms": 690.2,
+      "prompt_chars": 1558,
+      "resp_chars": 35,
+      "ok": true,
+      "attempt": 1
+    },
+    {
+      "kind": "programmer",
+      "latency_ms": 417.0,
+      "prompt_chars": 1370,
+      "resp_chars": 28,
+      "ok": true,
+      "attempt": 1
+    },
+    {
+      "kind": "programmer",
+      "latency_ms": 579.5,
+      "prompt_chars": 1392,
+      "resp_chars": 44,
+      "ok": true,
+      "attempt": 1
+    },
+    {
+      "kind": "programmer",
+      "latency_ms": 458.0,
+      "prompt_chars": 1292,
+      "resp_chars": 35,
+      "ok": true,
+      "attempt": 1
+    },
+    {
+      "kind": "programmer",
+      "latency_ms": 390.1,
+      "prompt_chars": 1535,
+      "resp_chars": 29,
+      "ok": true,
+      "attempt": 1
+    },
+    {
+      "kind": "programmer",
+      "latency_ms": 528.1,
+      "prompt_chars": 1350,
+      "resp_chars": 43,
+      "ok": true,
+      "attempt": 1
+    },
+    {
+      "kind": "programmer",
+      "latency_ms": 701.0,
+      "prompt_chars": 1673,
+      "resp_chars": 56,
+      "ok": true,
+      "attempt": 1
+    },
+    {
+      "kind": "programmer",
+      "latency_ms": 474.4,
+      "prompt_chars": 1431,
+      "resp_chars": 52,
+      "ok": true,
+      "attempt": 1
+    },
+    {
+      "kind": "programmer",
+      "latency_ms": 445.4,
+      "prompt_chars": 1944,
+      "resp_chars": 30,
+      "ok": true,
+      "attempt": 1
+    },
+    {
+      "kind": "programmer",
+      "latency_ms": 569.9,
+      "prompt_chars": 1820,
+      "resp_chars": 33,
+      "ok": true,
+      "attempt": 1
+    },
+    {
+      "kind": "programmer",
+      "latency_ms": 444.8,
+      "prompt_chars": 1448,
+      "resp_chars": 35,
+      "ok": true,
+      "attempt": 1
+    },
+    {
+      "kind": "programmer",
+      "latency_ms": 734.9,
+      "prompt_chars": 1750,
+      "resp_chars": 33,
+      "ok": true,
+      "attempt": 1
+    },
+    {
+      "kind": "programmer",
+      "latency_ms": 430.3,
+      "prompt_chars": 1539,
+      "resp_chars": 33,
+      "ok": true,
+      "attempt": 1
+    },
+    {
+      "kind": "programmer",
+      "latency_ms": 473.3,
+      "prompt_chars": 1254,
+      "resp_chars": 53,
+      "ok": true,
+      "attempt": 1
+    },
+    {
+      "kind": "programmer",
+      "latency_ms": 437.0,
+      "prompt_chars": 1268,
+      "resp_chars": 26,
+      "ok": true,
+      "attempt": 1
+    },
+    {
+      "kind": "programmer",
+      "latency_ms": 696.2,
+      "prompt_chars": 1222,
+      "resp_chars": 26,
+      "ok": true,
+      "attempt": 1
+    },
+    {
+      "kind": "programmer",
+      "latency_ms": 442.0,
+      "prompt_chars": 1773,
+      "resp_chars": 35,
+      "ok": true,
+      "attempt": 1
+    },
+    {
+      "kind": "programmer",
+      "latency_ms": 465.4,
+      "prompt_chars": 1815,
+      "resp_chars": 35,
+      "ok": true,
+      "attempt": 1
+    },
+    {
+      "kind": "programmer",
+      "latency_ms": 497.1,
+      "prompt_chars": 1926,
+      "resp_chars": 21,
+      "ok": true,
+      "attempt": 1
+    },
+    {
+      "kind": "programmer",
+      "latency_ms": 505.8,
+      "prompt_chars": 1672,
+      "resp_chars": 29,
+      "ok": true,
+      "attempt": 1
+    },
+    {
+      "kind": "programmer",
+      "latency_ms": 661.3,
+      "prompt_chars": 1254,
+      "resp_chars": 43,
+      "ok": true,
+      "attempt": 1
+    },
+    {
+      "kind": "programmer",
+      "latency_ms": 489.2,
+      "prompt_chars": 1651,
+      "resp_chars": 32,
+      "ok": true,
+      "attempt": 1
+    },
+    {
+      "kind": "programmer",
+      "latency_ms": 439.5,
+      "prompt_chars": 1654,
+      "resp_chars": 31,
+      "ok": true,
+      "attempt": 1
+    },
+    {
+      "kind": "programmer",
+      "latency_ms": 404.4,
+      "prompt_chars": 1232,
+      "resp_chars": 32,
+      "ok": true,
+      "attempt": 1
+    },
+    {
+      "kind": "programmer",
+      "latency_ms": 657.3,
+      "prompt_chars": 1369,
+      "resp_chars": 17,
+      "ok": true,
+      "attempt": 1
+    }
+  ]
+}
