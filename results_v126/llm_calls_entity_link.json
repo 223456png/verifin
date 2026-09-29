@@ -1,0 +1,23 @@
+{
+  "summary": {
+    "kind": "entity_link",
+    "calls": 1,
+    "ok": 1,
+    "fail": 0,
+    "success_rate": 1.0,
+    "avg_latency_ms": 731.2,
+    "p95_latency_ms": 731.2,
+    "prompt_chars_total": 861,
+    "resp_chars_total": 19
+  },
+  "calls": [
+    {
+      "kind": "entity_link",
+      "latency_ms": 731.2,
+      "prompt_chars": 861,
+      "resp_chars": 19,
+      "ok": true,
+      "attempt": 1
+    }
+  ]
+}

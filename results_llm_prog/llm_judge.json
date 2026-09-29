@@ -1,0 +1,263 @@
+{
+  "summary": {
+    "samples": 40,
+    "judged": 38,
+    "no_evidence": 2,
+    "judge_fail": 0,
+    "faithfulness": 0.105,
+    "avg_relevancy": 1.79,
+    "call_stats": {
+      "kind": "judge",
+      "calls": 38,
+      "ok": 38,
+      "fail": 0,
+      "success_rate": 1.0,
+      "avg_latency_ms": 1011.3,
+      "p95_latency_ms": 1271.5,
+      "prompt_chars_total": 94436,
+      "resp_chars_total": 4549
+    }
+  },
+  "judgments": [
+    {
+      "idx": 0,
+      "faithful": false,
+      "relevancy": 5,
+      "reason": "答案中的数值 -99.7105% 由 5829.0 和 2013165.0 计算得出，但证据中未提供这两个数值，且计算方式（除以绝对值）不符合净收入变化的常规表述，属于凭空编造。"
+    },
+    {
+      "idx": 1,
+      "faithful": true,
+      "relevancy": 5,
+      "reason": "答案计算8.1/56.0=14.4643%，与证据中Leased facilities总8.1和Total facilities总56.0一致，且精准回答了问题。"
+    },
+    {
+      "idx": 2,
+      "faithful": false,
+      "relevancy": 1,
+      "reason": "答案计算的35.477%基于1415和1917，但证据中无这些数值，且证据内容与问题（cash flow hedges的2011/2010变化）完全无关，答案也未回答该问题。"
+    },
+    {
+      "idx": 3,
+      "faithful": false,
+      "relevancy": 3,
+      "reason": "答案中的121.4和4187.8均未在证据中出现，且无法由证据数值合理运算得出，属于编造；问题询问股票奖励占总购买价的比例，但证据未提供总购买价或相关比例，答案仅部分相关。"
+    },
+    {
+      "idx": 4,
+      "faithful": false,
+      "relevancy": 1,
+      "reason": "答案计算基于无关的Masco数据且证据为CME公司内容，未提供Masco或S&P 500的五年回报数值，结论凭空编造且未回答问题。"
+    },
+    {
+      "idx": 5,
+      "faithful": false,
+      "relevancy": 1,
+      "reason": "证据中未包含任何关于2005年7月2日至2006年7月1日经营租赁租金费用的数值，答案中的265和1.0为凭空编造，且证据内容与问题完全无关。"
+    },
+    {
+      "idx": 6,
+      "faithful": false,
+      "relevancy": 1,
+      "reason": "答案未给出具体百分比数值，且未对证据中的463与4612进行运算，未回答问题。"
+    },
+    {
+      "idx": 7,
+      "faithful": false,
+      "relevancy": 1,
+      "reason": "答案计算6.44%基于397与6164，但证据中无6164这一数值，且397是2018年租金费用而非未来最低租金付款，证据未支持该比例，也未回答2018年未来最低租金付款占比问题。"
+    },
+    {
+      "idx": 8,
+      "faithful": false,
+      "relevancy": 1,
+      "reason": "答案未给出明确结论（是否跑赢），且表格数据被截断，无法从证据中得出答案。"
+    },
+    {
+      "idx": 9,
+      "faithful": false,
+      "relevancy": 1,
+      "reason": "答案数值0.0%基于(22-22)凭空编造，证据中无相关数值或运算依据，且证据内容与问题（2014至2015年未确认税收优惠变化）完全无关，未回答该问题。"
+    },
+    {
+      "idx": 10,
+      "faithful": true,
+      "relevancy": 5,
+      "reason": "答案数值由证据中2007年4711和2006年4926计算得出，且直接回答了增长率问题。"
+    },
+    {
+      "idx": 11,
+      "faithful": false,
+      "relevancy": 3,
+      "reason": "证据仅定义杠杆率为总资产除以股东权益，未提供债务或资产数值，答案中的2.1和911507.0及0.0002%无法由证据推导，且问题问债务资产比率而证据讲的是杠杆率，概念不匹配。"
+    },
+    {
+      "idx": 12,
+      "faithful": null,
+      "relevancy": null,
+      "reason": "no verified evidence"
+    },
+    {
+      "idx": 13,
+      "faithful": false,
+      "relevancy": 3,
+      "reason": "答案中的数值224.73和228.97未在证据中出现，且证据仅描述图表内容，未提供具体回报率，无法支持比较结论。"
+    },
+    {
+      "idx": 14,
+      "faithful": false,
+      "relevancy": 1,
+      "reason": "答案计算基于未在证据中出现的数值（195237/180993），且证据内容与递延税资产/监管资产无关，完全未回答问题。"
+    },
+    {
+      "idx": 15,
+      "faithful": false,
+      "relevancy": 1,
+      "reason": "答案计算的是单一增长率且基于无关的JPM数据，未使用证据中MRO的2011/2010/2009现金流变化表，也未回答三年平均净年变化，完全偏离问题。"
+    },
+    {
+      "idx": 16,
+      "faithful": false,
+      "relevancy": 1,
+      "reason": "答案未提供任何数值或运算结果，且证据中无目的地数量信息，完全未回答问题。"
+    },
+    {
+      "idx": 17,
+      "faithful": false,
+      "relevancy": 1,
+      "reason": "答案中的数值704.25%并非证据中任何数值的合理运算结果，且证据仅涉及净收入变化，未提供2016和2017年净收入数据，无法支持该平均净收入计算；同时答案未直接回答问题。"
+    },
+    {
+      "idx": 18,
+      "faithful": false,
+      "relevancy": 1,
+      "reason": "答案数值438/139549与证据中无关，且证据未包含问题所需的 accrued interest/penalties 或 non-current income taxes payable 数据，完全未回答问题。"
+    },
+    {
+      "idx": 19,
+      "faithful": false,
+      "relevancy": 1,
+      "reason": "答案数值267.4%与证据中任何数值或合理运算无关，且证据未提供问题所需的资产隔离公平价值数据，答案也未回答问题。"
+    },
+    {
+      "idx": 20,
+      "faithful": false,
+      "relevancy": 3,
+      "reason": "答案中的数值-19.3548%和表格数据（如$50,131等）均未在证据中出现，且证据未提供2008至2009年商业抵押贷款公允价值的具体数值，无法支持该计算结果；答案部分涉及问题但证据不匹配。"
+    },
+    {
+      "idx": 21,
+      "faithful": false,
+      "relevancy": 1,
+      "reason": "答案未提供任何具体百分比差值，仅重复证据中的描述性文字，未回答问题的数值要求，且数值凭空缺失。"
+    },
+    {
+      "idx": 22,
+      "faithful": false,
+      "relevancy": 1,
+      "reason": "答案内容与问题无关，且未提供任何股价百分比变化数值，证据中也不含相关数据。"
+    },
+    {
+      "idx": 23,
+      "faithful": false,
+      "relevancy": 1,
+      "reason": "答案未提供任何百分比数值或计算，仅重复证据中的文字，未回答关于资本租赁义务占总合同义务百分比的问题。"
+    },
+    {
+      "idx": 24,
+      "faithful": true,
+      "relevancy": 5,
+      "reason": "答案计算26900/16900=159.17%，与证据中总乘务员26900和总维护人员16900一致，且直接回答了比例问题。"
+    },
+    {
+      "idx": 25,
+      "faithful": false,
+      "relevancy": 1,
+      "reason": "证据中仅提到Alpharetta的166000平方英尺，未提供Charlotte的平方英尺数据，答案中的30000和166000无法从证据推导，且未回答问题。"
+    },
+    {
+      "idx": 26,
+      "faithful": false,
+      "relevancy": 1,
+      "reason": "答案中的6.3和18.1及34.8066%均未在证据中出现，且证据内容为收入变动表，与问题要求的所得税收益占股票薪酬成本比例无关，完全未回答问题。"
+    },
+    {
+      "idx": 27,
+      "faithful": false,
+      "relevancy": 3,
+      "reason": "答案计算使用了139549和201808，但证据仅提供2008年139.5百万，未提供2007年数值，且证据表格年份为2011-2008，无法支持2007年基数，故数值非证据合理运算结果。"
+    },
+    {
+      "idx": 28,
+      "faithful": null,
+      "relevancy": null,
+      "reason": "no verified evidence"
+    },
+    {
+      "idx": 29,
+      "faithful": false,
+      "relevancy": 1,
+      "reason": "答案计算基于证据中不存在的200和375，且未回答关于长期债务到期期限的借款比例问题。"
+    },
+    {
+      "idx": 30,
+      "faithful": false,
+      "relevancy": 1,
+      "reason": "证据仅涉及Entergy Mississippi的净收入讨论，未包含农业产品收入或总营业收入数据，答案数值3581/21813无来源且与问题无关。"
+    },
+    {
+      "idx": 31,
+      "faithful": false,
+      "relevancy": 1,
+      "reason": "答案计算896/3173得到28.24%，但问题问的是总营业费用占净利息收入的比例，而证据中总营业费用为896，净利息收入为3173，计算正确，但答案数值0.2823826032146234%明显错误（应为28.24%），且验证结果为REJECT，数值与证据不符。"
+    },
+    {
+      "idx": 32,
+      "faithful": false,
+      "relevancy": 1,
+      "reason": "答案数值207.0%与证据中的190 million或30%无任何算术关系，且未回答‘最大所得税拨备’问题，完全无关。"
+    },
+    {
+      "idx": 33,
+      "faithful": true,
+      "relevancy": 5,
+      "reason": "答案计算了2018年CIB Markets净利息收入占管理净利息收入的比例，3087/55687=0.0554%，与证据数值一致，且直接回答了问题。"
+    },
+    {
+      "idx": 34,
+      "faithful": false,
+      "relevancy": 1,
+      "reason": "答案数值-10354.0%由(49447-59801)得出，但证据中无这些数字，且未提供总可供出售证券的公允价值，无法支持该计算；答案也未回答所问的公平价值金额。"
+    },
+    {
+      "idx": 35,
+      "faithful": false,
+      "relevancy": 1,
+      "reason": "答案给出77.6%且表达式(70 - -7.6)与证据中的金额（如201,808等）无任何合理运算关系，且未回答所问的ending balance金额，完全偏离问题。"
+    },
+    {
+      "idx": 36,
+      "faithful": false,
+      "relevancy": 1,
+      "reason": "证据仅提及宾夕法尼亚州卡农斯堡的办公设施，未涉及佐治亚州阿尔法利塔的任何平方英尺数据，答案中的数值和地点均无证据支持，且未回答问题。"
+    },
+    {
+      "idx": 37,
+      "faithful": false,
+      "relevancy": 1,
+      "reason": "答案未给出问题所需的百分比数值，仅重复证据中的绝对平方英尺数，且未进行任何运算或提供比例，因此不忠实且未回答问题。"
+    },
+    {
+      "idx": 38,
+      "faithful": false,
+      "relevancy": 1,
+      "reason": "答案未提供2017、2016、2015年取消的股票期权总数（百万），而是引用了无关的补偿费用和反稀释股份信息，且数值与问题不匹配。"
+    },
+    {
+      "idx": 39,
+      "faithful": false,
+      "relevancy": 1,
+      "reason": "答案计算了3052+5016=8068，但证据中这些数字是金额（千美元）而非股票份额，且问题问的是2004和2003年发行给员工的普通股总股数，证据未提供相关数据，答案完全未回答问题。"
+    }
+  ]
+}

@@ -1,0 +1,901 @@
+{
+  "index": 72,
+  "query": "what percentage of the outstanding options were from plans approved by security holders?",
+  "ground_truth": "0.99509",
+  "gold_program": null,
+  "gold_evidence": [
+    {
+      "doc_id": "CME/2010/page_123.pdf-4",
+      "chunk_id": null
+    }
+  ],
+  "answer_value": [
+    [
+      99.5088,
+      "%"
+    ],
+    [
+      0.995088,
+      null
+    ],
+    [
+      0.004912,
+      null
+    ],
+    [
+      0.23489,
+      null
+    ]
+  ],
+  "is_correct": true,
+  "calculation_result": {
+    "kind": "ratio",
+    "expression": "(1211143.0 / 1217121.0)",
+    "value": 99.5088,
+    "unit": "%",
+    "fraction": 0.995088,
+    "difference": null,
+    "difference_unit": null,
+    "base": {
+      "value": 1217121.0,
+      "unit": null,
+      "period": "",
+      "chunk_id": "681c849fcbcc461bb419c0cbe15f1fdd"
+    },
+    "target": {
+      "value": 1211143.0,
+      "unit": null,
+      "period": "",
+      "chunk_id": "681c849fcbcc461bb419c0cbe15f1fdd"
+    },
+    "alternates": [
+      {
+        "fraction": 0.004912
+      },
+      {
+        "fraction": 0.23489
+      }
+    ],
+    "error": null,
+    "evidence": [
+      "681c849fcbcc461bb419c0cbe15f1fdd",
+      "681c849fcbcc461bb419c0cbe15f1fdd"
+    ]
+  },
+  "tools_used": [
+    "retrieve",
+    "verify_claim_batch",
+    "expand_document",
+    "expand_document",
+    "expand_document",
+    "expand_document",
+    "expand_document",
+    "expand_document",
+    "expand_document",
+    "expand_document",
+    "expand_document",
+    "expand_document",
+    "calc_expression",
+    "calc_expression",
+    "calc_expression",
+    "calc_expression",
+    "calc_expression",
+    "calc_expression",
+    "calc_expression"
+  ],
+  "nodes": [
+    "planner",
+    "retriever",
+    "verifier",
+    "calculator",
+    "synthesizer"
+  ],
+  "verifier_decisions": [
+    "ACCEPT"
+  ],
+  "retrieved_docs": [
+    {
+      "chunk_id": "681c849fcbcc461bb419c0cbe15f1fdd",
+      "doc_id": "CME/2010/page_123.pdf-2",
+      "score": 1.0,
+      "content_head": "compensation plan approved by security holders .\nthe employee stock purchase plan and the 2005 director stock plan were approved by shareholders at our 2005 annual meeting of shareholders .\nin connect"
+    },
+    {
+      "chunk_id": "1a4b866d43d44ddfad2167371852c241",
+      "doc_id": "CME/2010/page_123.pdf-4",
+      "score": 1.0,
+      "content_head": "compensation plan approved by security holders .\nthe employee stock purchase plan and the 2005 director stock plan were approved by shareholders at our 2005 annual meeting of shareholders .\nin connect"
+    },
+    {
+      "chunk_id": "f574c92b4d1849c886e218b55b7df688",
+      "doc_id": "CME/2010/page_123.pdf-3",
+      "score": 1.0,
+      "content_head": "compensation plan approved by security holders .\nthe employee stock purchase plan and the 2005 director stock plan were approved by shareholders at our 2005 annual meeting of shareholders .\nin connect"
+    },
+    {
+      "chunk_id": "6ddfe31d857e4b4999574c3949fb2a58",
+      "doc_id": "CME/2010/page_123.pdf-5",
+      "score": 1.0,
+      "content_head": "compensation plan approved by security holders .\nthe employee stock purchase plan and the 2005 director stock plan were approved by shareholders at our 2005 annual meeting of shareholders .\nin connect"
+    },
+    {
+      "chunk_id": "981702c3f6df4725bcb308e80e040956",
+      "doc_id": "CME/2010/page_123.pdf-1",
+      "score": 1.0,
+      "content_head": "compensation plan approved by security holders .\nthe employee stock purchase plan and the 2005 director stock plan were approved by shareholders at our 2005 annual meeting of shareholders .\nin connect"
+    },
+    {
+      "chunk_id": "a5181ec591da40569651ca3b8c1db402",
+      "doc_id": "GPN/2014/page_92.pdf-1",
+      "score": 0.8889870205985027,
+      "content_head": "the following table provides certain information as of may 31 , 2014 concerning the shares of the company 2019s common stock that may be issued under existing equity compensation plans .\nfor more info"
+    },
+    {
+      "chunk_id": "9fd8e31ca6c64fc08f14a144192bd1b3",
+      "doc_id": "GPN/2014/page_92.pdf-2",
+      "score": 0.8889870205985027,
+      "content_head": "the following table provides certain information as of may 31 , 2014 concerning the shares of the company 2019s common stock that may be issued under existing equity compensation plans .\nfor more info"
+    },
+    {
+      "chunk_id": "0ed8473ef5e347abbcb1c9139bc2df61",
+      "doc_id": "TFX/2017/page_78.pdf-1",
+      "score": 0.7328408943675764,
+      "content_head": "Table data:\n| Plan Category | Number of Securitiesto be Issued UponExercise ofOutstanding Options, Warrants and Rights (A)(B) | Weighted-AverageExercise Price ofOutstanding Options, Warrants and Right"
+    },
+    {
+      "chunk_id": "d45049e1efae406891aa5611db665774",
+      "doc_id": "TFX/2017/page_78.pdf-2",
+      "score": 0.7328408943675764,
+      "content_head": "Table data:\n| Plan Category | Number of Securitiesto be Issued UponExercise ofOutstanding Options, Warrants and Rights (A)(B) | Weighted-AverageExercise Price ofOutstanding Options, Warrants and Right"
+    },
+    {
+      "chunk_id": "607c0dc3644c452bb29b989c0d5af16b",
+      "doc_id": "TFX/2017/page_78.pdf-3",
+      "score": 0.7328408943675764,
+      "content_head": "Table data:\n| Plan Category | Number of Securitiesto be Issued UponExercise ofOutstanding Options, Warrants and Rights (A)(B) | Weighted-AverageExercise Price ofOutstanding Options, Warrants and Right"
+    },
+    {
+      "chunk_id": "37415d3c0bcb4b2c83b3e3317bd07ce4",
+      "doc_id": "AAPL/2006/page_131.pdf-2",
+      "score": 0.6962705958924865,
+      "content_head": "security ownership of 5% ( 5 % ) holders , directors , nominees and executive officers name of beneficial owner shares of common stock beneficially owned ( 1 ) percent of common stock outstanding .\n\na"
+    },
+    {
+      "chunk_id": "804deaec15d8461aae1c283ea5284400",
+      "doc_id": "AAPL/2006/page_131.pdf-1",
+      "score": 0.6962705958924865,
+      "content_head": "security ownership of 5% ( 5 % ) holders , directors , nominees and executive officers name of beneficial owner shares of common stock beneficially owned ( 1 ) percent of common stock outstanding .\n\na"
+    },
+    {
+      "chunk_id": "082eba1b463d4bb5a5482e44bff9b03f",
+      "doc_id": "HOLX/2006/page_71.pdf-1",
+      "score": 0.38519237259910205,
+      "content_head": "part iii item 10 .\ndirectors and executive officers of the registrant .\npursuant to section 406 of the sarbanes-oxley act of 2002 , we have adopted a code of ethics for senior financial officers that "
+    },
+    {
+      "chunk_id": "d747aa1f0eb74072b6ed1358ec0b5c8e",
+      "doc_id": "EMR/2017/page_78.pdf-1",
+      "score": 0.36644377954019325,
+      "content_head": "the grant date fair value of options is estimated using the black-scholes option-pricing model . the weighted-average assumptions used in valuations for 2017 , 2016 and 2015 are , respectively : risk-"
+    },
+    {
+      "chunk_id": "03ce20e6aaab4480baa00572bcff3537",
+      "doc_id": "EMR/2017/page_78.pdf-2",
+      "score": 0.36644377954019325,
+      "content_head": "the grant date fair value of options is estimated using the black-scholes option-pricing model . the weighted-average assumptions used in valuations for 2017 , 2016 and 2015 are , respectively : risk-"
+    },
+    {
+      "chunk_id": "65ce32c5eed04ef3930fa6508c893831",
+      "doc_id": "HOLX/2003/page_52.pdf-1",
+      "score": 0.3346345703199348,
+      "content_head": "( 1 ) includes the following plans : 1986 combination stock option plan ; amended and restated 1990 non- employee director stock option plan ; 1995 combination stock option plan ; amended and restated"
+    },
+    {
+      "chunk_id": "9ea9ce233ec04c57815c76bb45d0216f",
+      "doc_id": "HOLX/2007/page_93.pdf-1",
+      "score": 0.3109160468579228,
+      "content_head": "part iii item 10 .\ndirectors , and executive officers and corporate governance .\npursuant to section 406 of the sarbanes-oxley act of 2002 , we have adopted a code of ethics for senior financial offic"
+    },
+    {
+      "chunk_id": "74497ae57f174ff1b2b17625438181a3",
+      "doc_id": "HOLX/2007/page_93.pdf-2",
+      "score": 0.3109160468579228,
+      "content_head": "part iii item 10 .\ndirectors , and executive officers and corporate governance .\npursuant to section 406 of the sarbanes-oxley act of 2002 , we have adopted a code of ethics for senior financial offic"
+    },
+    {
+      "chunk_id": "9616ac4319f54014a83537663d33d4a1",
+      "doc_id": "HOLX/2003/page_52.pdf-1",
+      "score": 0.3078265779347489,
+      "content_head": "part iii item 10 .\ndirectors and executive officers of the registrant .\nthe information required by this item is incorporated by reference to the sections entitled 201celection of directors 201d and 2"
+    },
+    {
+      "chunk_id": "4dfb3ded619a4d78941d35f59b056795",
+      "doc_id": "HOLX/2006/page_71.pdf-1",
+      "score": 0.020725852206339535,
+      "content_head": "( 1 ) includes the following plans : 1997 employee equity incentive plan and 2000 acquisition equity incentive plan .\na description of each of these plans is as follows : 1997 employee equity incentiv"
+    },
+    {
+      "chunk_id": "1d936cedbf2a4a179a4472d1105b3230",
+      "doc_id": "TFX/2017/page_78.pdf-1",
+      "score": 0.0,
+      "content_head": "part a0iii item a010 .\ndirectors , executive officers and corporate governance for the information required by this item a010 with respect to our executive officers , see part a0i , item 1 .\nof this r"
+    },
+    {
+      "chunk_id": "15332cfb9a7449de967d4d9d2f7d8fec",
+      "doc_id": "TFX/2017/page_78.pdf-1",
+      "score": 0.0,
+      "content_head": "part a0iii item a010 .\ndirectors , executive officers and corporate governance for the information required by this item a010 with respect to our executive officers , see part a0i , item 1 .\nof this r"
+    },
+    {
+      "chunk_id": "afa857375db74985a026c63de6c5639d",
+      "doc_id": "TFX/2017/page_78.pdf-2",
+      "score": 0.0,
+      "content_head": "part a0iii item a010 .\ndirectors , executive officers and corporate governance for the information required by this item a010 with respect to our executive officers , see part a0i , item 1 .\nof this r"
+    },
+    {
+      "chunk_id": "41d704199e6f4a38ab4562b151633d84",
+      "doc_id": "TFX/2017/page_78.pdf-2",
+      "score": 0.0,
+      "content_head": "part a0iii item a010 .\ndirectors , executive officers and corporate governance for the information required by this item a010 with respect to our executive officers , see part a0i , item 1 .\nof this r"
+    },
+    {
+      "chunk_id": "ee34b9f1eda340ee8cd2644b6e0ebbc2",
+      "doc_id": "TFX/2017/page_78.pdf-3",
+      "score": 0.0,
+      "content_head": "part a0iii item a010 .\ndirectors , executive officers and corporate governance for the information required by this item a010 with respect to our executive officers , see part a0i , item 1 .\nof this r"
+    }
+  ],
+  "verify_flags": {
+    "what percentage of the outstanding options were from plans approved by security holders?": {
+      "claim": {
+        "entity": null,
+        "period": null,
+        "metric": null,
+        "definition": null
+      },
+      "results": [
+        {
+          "chunk_id": "681c849fcbcc461bb419c0cbe15f1fdd",
+          "passed": true,
+          "entity_match": null,
+          "period_match": null,
+          "metric_match": null,
+          "definition_match": null,
+          "mismatches": [],
+          "missing": [],
+          "confidence": 0.0,
+          "value": 22.0,
+          "unit": null,
+          "period": "2014",
+          "source_type": "unknown",
+          "is_table": true
+        },
+        {
+          "chunk_id": "1a4b866d43d44ddfad2167371852c241",
+          "passed": true,
+          "entity_match": null,
+          "period_match": null,
+          "metric_match": null,
+          "definition_match": null,
+          "mismatches": [],
+          "missing": [],
+          "confidence": 0.0,
+          "value": 22.0,
+          "unit": null,
+          "period": "2014",
+          "source_type": "unknown",
+          "is_table": true
+        },
+        {
+          "chunk_id": "f574c92b4d1849c886e218b55b7df688",
+          "passed": true,
+          "entity_match": null,
+          "period_match": null,
+          "metric_match": null,
+          "definition_match": null,
+          "mismatches": [],
+          "missing": [],
+          "confidence": 0.0,
+          "value": 22.0,
+          "unit": null,
+          "period": "2014",
+          "source_type": "unknown",
+          "is_table": true
+        },
+        {
+          "chunk_id": "6ddfe31d857e4b4999574c3949fb2a58",
+          "passed": true,
+          "entity_match": null,
+          "period_match": null,
+          "metric_match": null,
+          "definition_match": null,
+          "mismatches": [],
+          "missing": [],
+          "confidence": 0.0,
+          "value": 22.0,
+          "unit": null,
+          "period": "2014",
+          "source_type": "unknown",
+          "is_table": true
+        },
+        {
+          "chunk_id": "981702c3f6df4725bcb308e80e040956",
+          "passed": true,
+          "entity_match": null,
+          "period_match": null,
+          "metric_match": null,
+          "definition_match": null,
+          "mismatches": [],
+          "missing": [],
+          "confidence": 0.0,
+          "value": 22.0,
+          "unit": null,
+          "period": "2014",
+          "source_type": "unknown",
+          "is_table": true
+        },
+        {
+          "chunk_id": "a5181ec591da40569651ca3b8c1db402",
+          "passed": true,
+          "entity_match": null,
+          "period_match": null,
+          "metric_match": null,
+          "definition_match": null,
+          "mismatches": [],
+          "missing": [],
+          "confidence": 0.0,
+          "value": 13.0,
+          "unit": null,
+          "period": "2014",
+          "source_type": "unknown",
+          "is_table": true
+        },
+        {
+          "chunk_id": "9fd8e31ca6c64fc08f14a144192bd1b3",
+          "passed": true,
+          "entity_match": null,
+          "period_match": null,
+          "metric_match": null,
+          "definition_match": null,
+          "mismatches": [],
+          "missing": [],
+          "confidence": 0.0,
+          "value": 13.0,
+          "unit": null,
+          "period": "2014",
+          "source_type": "unknown",
+          "is_table": true
+        },
+        {
+          "chunk_id": "0ed8473ef5e347abbcb1c9139bc2df61",
+          "passed": true,
+          "entity_match": null,
+          "period_match": null,
+          "metric_match": null,
+          "definition_match": null,
+          "mismatches": [],
+          "missing": [],
+          "confidence": 0.0,
+          "value": 1708928.0,
+          "unit": null,
+          "period": null,
+          "source_type": "unknown",
+          "is_table": true
+        },
+        {
+          "chunk_id": "d45049e1efae406891aa5611db665774",
+          "passed": true,
+          "entity_match": null,
+          "period_match": null,
+          "metric_match": null,
+          "definition_match": null,
+          "mismatches": [],
+          "missing": [],
+          "confidence": 0.0,
+          "value": 1708928.0,
+          "unit": null,
+          "period": null,
+          "source_type": "unknown",
+          "is_table": true
+        },
+        {
+          "chunk_id": "607c0dc3644c452bb29b989c0d5af16b",
+          "passed": true,
+          "entity_match": null,
+          "period_match": null,
+          "metric_match": null,
+          "definition_match": null,
+          "mismatches": [],
+          "missing": [],
+          "confidence": 0.0,
+          "value": 1708928.0,
+          "unit": null,
+          "period": null,
+          "source_type": "unknown",
+          "is_table": true
+        },
+        {
+          "chunk_id": "37415d3c0bcb4b2c83b3e3317bd07ce4",
+          "passed": true,
+          "entity_match": null,
+          "period_match": null,
+          "metric_match": null,
+          "definition_match": null,
+          "mismatches": [],
+          "missing": [],
+          "confidence": 0.0,
+          "value": 14.0,
+          "unit": null,
+          "period": "2005",
+          "source_type": "unknown",
+          "is_table": false
+        },
+        {
+          "chunk_id": "804deaec15d8461aae1c283ea5284400",
+          "passed": true,
+          "entity_match": null,
+          "period_match": null,
+          "metric_match": null,
+          "definition_match": null,
+          "mismatches": [],
+          "missing": [],
+          "confidence": 0.0,
+          "value": 14.0,
+          "unit": null,
+          "period": "2005",
+          "source_type": "unknown",
+          "is_table": false
+        },
+        {
+          "chunk_id": "082eba1b463d4bb5a5482e44bff9b03f",
+          "passed": true,
+          "entity_match": null,
+          "period_match": null,
+          "metric_match": null,
+          "definition_match": null,
+          "mismatches": [],
+          "missing": [],
+          "confidence": 0.0,
+          "value": 30.0,
+          "unit": null,
+          "period": "2006",
+          "source_type": "unknown",
+          "is_table": false
+        },
+        {
+          "chunk_id": "d747aa1f0eb74072b6ed1358ec0b5c8e",
+          "passed": true,
+          "entity_match": null,
+          "period_match": null,
+          "metric_match": null,
+          "definition_match": null,
+          "mismatches": [],
+          "missing": [],
+          "confidence": 0.0,
+          "value": 944002.0,
+          "unit": null,
+          "period": "2017",
+          "source_type": "unknown",
+          "is_table": false
+        },
+        {
+          "chunk_id": "03ce20e6aaab4480baa00572bcff3537",
+          "passed": true,
+          "entity_match": null,
+          "period_match": null,
+          "metric_match": null,
+          "definition_match": null,
+          "mismatches": [],
+          "missing": [],
+          "confidence": 0.0,
+          "value": 944002.0,
+          "unit": null,
+          "period": "2017",
+          "source_type": "unknown",
+          "is_table": false
+        },
+        {
+          "chunk_id": "65ce32c5eed04ef3930fa6508c893831",
+          "passed": true,
+          "entity_match": null,
+          "period_match": null,
+          "metric_match": null,
+          "definition_match": null,
+          "mismatches": [],
+          "missing": [],
+          "confidence": 0.0,
+          "value": 2.0,
+          "unit": null,
+          "period": "2000",
+          "source_type": "unknown",
+          "is_table": true
+        },
+        {
+          "chunk_id": "9ea9ce233ec04c57815c76bb45d0216f",
+          "passed": true,
+          "entity_match": null,
+          "period_match": null,
+          "metric_match": null,
+          "definition_match": null,
+          "mismatches": [],
+          "missing": [],
+          "confidence": 0.0,
+          "value": 7.33,
+          "unit": null,
+          "period": "2014",
+          "source_type": "unknown",
+          "is_table": false
+        },
+        {
+          "chunk_id": "74497ae57f174ff1b2b17625438181a3",
+          "passed": true,
+          "entity_match": null,
+          "period_match": null,
+          "metric_match": null,
+          "definition_match": null,
+          "mismatches": [],
+          "missing": [],
+          "confidence": 0.0,
+          "value": 7.33,
+          "unit": null,
+          "period": "2014",
+          "source_type": "unknown",
+          "is_table": false
+        },
+        {
+          "chunk_id": "9616ac4319f54014a83537663d33d4a1",
+          "passed": true,
+          "entity_match": null,
+          "period_match": null,
+          "metric_match": null,
+          "definition_match": null,
+          "mismatches": [],
+          "missing": [],
+          "confidence": 0.0,
+          "value": 27.0,
+          "unit": null,
+          "period": "2003",
+          "source_type": "unknown",
+          "is_table": false
+        },
+        {
+          "chunk_id": "4dfb3ded619a4d78941d35f59b056795",
+          "passed": true,
+          "entity_match": null,
+          "period_match": null,
+          "metric_match": null,
+          "definition_match": null,
+          "mismatches": [],
+          "missing": [],
+          "confidence": 0.0,
+          "value": 1.0,
+          "unit": null,
+          "period": "2000",
+          "source_type": "unknown",
+          "is_table": true
+        },
+        {
+          "chunk_id": "1d936cedbf2a4a179a4472d1105b3230",
+          "passed": true,
+          "entity_match": null,
+          "period_match": null,
+          "metric_match": null,
+          "definition_match": null,
+          "mismatches": [],
+          "missing": [],
+          "confidence": 0.0,
+          "value": 201.0,
+          "unit": null,
+          "period": "2018",
+          "source_type": "unknown",
+          "is_table": false
+        },
+        {
+          "chunk_id": "15332cfb9a7449de967d4d9d2f7d8fec",
+          "passed": true,
+          "entity_match": null,
+          "period_match": null,
+          "metric_match": null,
+          "definition_match": null,
+          "mismatches": [],
+          "missing": [],
+          "confidence": 0.0,
+          "value": 201.0,
+          "unit": null,
+          "period": "2018",
+          "source_type": "unknown",
+          "is_table": false
+        },
+        {
+          "chunk_id": "afa857375db74985a026c63de6c5639d",
+          "passed": true,
+          "entity_match": null,
+          "period_match": null,
+          "metric_match": null,
+          "definition_match": null,
+          "mismatches": [],
+          "missing": [],
+          "confidence": 0.0,
+          "value": 201.0,
+          "unit": null,
+          "period": "2018",
+          "source_type": "unknown",
+          "is_table": false
+        },
+        {
+          "chunk_id": "41d704199e6f4a38ab4562b151633d84",
+          "passed": true,
+          "entity_match": null,
+          "period_match": null,
+          "metric_match": null,
+          "definition_match": null,
+          "mismatches": [],
+          "missing": [],
+          "confidence": 0.0,
+          "value": 201.0,
+          "unit": null,
+          "period": "2018",
+          "source_type": "unknown",
+          "is_table": false
+        },
+        {
+          "chunk_id": "ee34b9f1eda340ee8cd2644b6e0ebbc2",
+          "passed": true,
+          "entity_match": null,
+          "period_match": null,
+          "metric_match": null,
+          "definition_match": null,
+          "mismatches": [],
+          "missing": [],
+          "confidence": 0.0,
+          "value": 201.0,
+          "unit": null,
+          "period": "2018",
+          "source_type": "unknown",
+          "is_table": false
+        }
+      ],
+      "passed_count": 25,
+      "total_count": 25,
+      "decision": "ACCEPT",
+      "passed": true,
+      "confidence": 0.0,
+      "conflict": {
+        "level": "major",
+        "conflict": true,
+        "reconciled_value": 22.0,
+        "reconciled_unit": null,
+        "note": "unconstrained claim: top-ranked evidence value selected",
+        "preference_note": null,
+        "values": [
+          {
+            "chunk_id": "681c849fcbcc461bb419c0cbe15f1fdd",
+            "value": 22.0,
+            "unit": null,
+            "base_value": 22.0,
+            "base_unit": "million",
+            "year": 2014,
+            "source_type": "unknown"
+          },
+          {
+            "chunk_id": "1a4b866d43d44ddfad2167371852c241",
+            "value": 22.0,
+            "unit": null,
+            "base_value": 22.0,
+            "base_unit": "million",
+            "year": 2014,
+            "source_type": "unknown"
+          },
+          {
+            "chunk_id": "f574c92b4d1849c886e218b55b7df688",
+            "value": 22.0,
+            "unit": null,
+            "base_value": 22.0,
+            "base_unit": "million",
+            "year": 2014,
+            "source_type": "unknown"
+          },
+          {
+            "chunk_id": "6ddfe31d857e4b4999574c3949fb2a58",
+            "value": 22.0,
+            "unit": null,
+            "base_value": 22.0,
+            "base_unit": "million",
+            "year": 2014,
+            "source_type": "unknown"
+          },
+          {
+            "chunk_id": "981702c3f6df4725bcb308e80e040956",
+            "value": 22.0,
+            "unit": null,
+            "base_value": 22.0,
+            "base_unit": "million",
+            "year": 2014,
+            "source_type": "unknown"
+          },
+          {
+            "chunk_id": "a5181ec591da40569651ca3b8c1db402",
+            "value": 13.0,
+            "unit": null,
+            "base_value": 13.0,
+            "base_unit": "million",
+            "year": 2014,
+            "source_type": "unknown"
+          },
+          {
+            "chunk_id": "9fd8e31ca6c64fc08f14a144192bd1b3",
+            "value": 13.0,
+            "unit": null,
+            "base_value": 13.0,
+            "base_unit": "million",
+            "year": 2014,
+            "source_type": "unknown"
+          },
+          {
+            "chunk_id": "0ed8473ef5e347abbcb1c9139bc2df61",
+            "value": 1708928.0,
+            "unit": null,
+            "base_value": 1708928.0,
+            "base_unit": "million",
+            "year": null,
+            "source_type": "unknown"
+          },
+          {
+            "chunk_id": "d45049e1efae406891aa5611db665774",
+            "value": 1708928.0,
+            "unit": null,
+            "base_value": 1708928.0,
+            "base_unit": "million",
+            "year": null,
+            "source_type": "unknown"
+          },
+          {
+            "chunk_id": "607c0dc3644c452bb29b989c0d5af16b",
+            "value": 1708928.0,
+            "unit": null,
+            "base_value": 1708928.0,
+            "base_unit": "million",
+            "year": null,
+            "source_type": "unknown"
+          },
+          {
+            "chunk_id": "37415d3c0bcb4b2c83b3e3317bd07ce4",
+            "value": 14.0,
+            "unit": null,
+            "base_value": 14.0,
+            "base_unit": "million",
+            "year": 2005,
+            "source_type": "unknown"
+          },
+          {
+            "chunk_id": "804deaec15d8461aae1c283ea5284400",
+            "value": 14.0,
+            "unit": null,
+            "base_value": 14.0,
+            "base_unit": "million",
+            "year": 2005,
+            "source_type": "unknown"
+          },
+          {
+            "chunk_id": "082eba1b463d4bb5a5482e44bff9b03f",
+            "value": 30.0,
+            "unit": null,
+            "base_value": 30.0,
+            "base_unit": "million",
+            "year": 2006,
+            "source_type": "unknown"
+          },
+          {
+            "chunk_id": "d747aa1f0eb74072b6ed1358ec0b5c8e",
+            "value": 944002.0,
+            "unit": null,
+            "base_value": 944002.0,
+            "base_unit": "million",
+            "year": 2017,
+            "source_type": "unknown"
+          },
+          {
+            "chunk_id": "03ce20e6aaab4480baa00572bcff3537",
+            "value": 944002.0,
+            "unit": null,
+            "base_value": 944002.0,
+            "base_unit": "million",
+            "year": 2017,
+            "source_type": "unknown"
+          },
+          {
+            "chunk_id": "65ce32c5eed04ef3930fa6508c893831",
+            "value": 2.0,
+            "unit": null,
+            "base_value": 2.0,
+            "base_unit": "million",
+            "year": 2000,
+            "source_type": "unknown"
+          },
+          {
+            "chunk_id": "9ea9ce233ec04c57815c76bb45d0216f",
+            "value": 7.33,
+            "unit": null,
+            "base_value": 7.33,
+            "base_unit": "million",
+            "year": 2014,
+            "source_type": "unknown"
+          },
+          {
+            "chunk_id": "74497ae57f174ff1b2b17625438181a3",
+            "value": 7.33,
+            "unit": null,
+            "base_value": 7.33,
+            "base_unit": "million",
+            "year": 2014,
+            "source_type": "unknown"
+          },
+          {
+            "chunk_id": "9616ac4319f54014a83537663d33d4a1",
+            "value": 27.0,
+            "unit": null,
+            "base_value": 27.0,
+            "base_unit": "million",
+            "year": 2003,
+            "source_type": "unknown"
+          },
+          {
+            "chunk_id": "4dfb3ded619a4d78941d35f59b056795",
+            "value": 1.0,
+            "unit": null,
+            "base_value": 1.0,
+            "base_unit": "million",
+            "year": 2000,
+            "source_type": "unknown"
+          },
+          {
+            "chunk_id": "1d936cedbf2a4a179a4472d1105b3230",
+            "value": 201.0,
+            "unit": null,
+            "base_value": 201.0,
+            "base_unit": "million",
+            "year": 2018,
+            "source_type": "unknown"
+          },
+          {
+            "chunk_id": "15332cfb9a7449de967d4d9d2f7d8fec",
+            "value": 201.0,
+            "unit": null,
+            "base_value": 201.0,
+            "base_unit": "million",
+            "year": 2018,
+            "source_type": "unknown"
+          },
+          {
+            "chunk_id": "afa857375db74985a026c63de6c5639d",
+            "value": 201.0,
+            "unit": null,
+            "base_value": 201.0,
+            "base_unit": "million",
+            "year": 2018,
+            "source_type": "unknown"
+          },
+          {
+            "chunk_id": "41d704199e6f4a38ab4562b151633d84",
+            "value": 201.0,
+            "unit": null,
+            "base_value": 201.0,
+            "base_unit": "million",
+            "year": 2018,
+            "source_type": "unknown"
+          },
+          {
+            "chunk_id": "ee34b9f1eda340ee8cd2644b6e0ebbc2",
+            "value": 201.0,
+            "unit": null,
+            "base_value": 201.0,
+            "base_unit": "million",
+            "year": 2018,
+            "source_type": "unknown"
+          }
+        ]
+      },
+      "sub_task_index": 0
+    }
+  }
+}

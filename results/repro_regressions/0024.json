@@ -1,0 +1,910 @@
+{
+  "index": 24,
+  "query": "what is the ratio of the total flight attendants to total maintenance personnel",
+  "ground_truth": "1.59172",
+  "gold_program": null,
+  "gold_evidence": [
+    {
+      "doc_id": "AAL/2016/page_8.pdf-4",
+      "chunk_id": null
+    }
+  ],
+  "answer_value": [
+    [
+      159.1716,
+      "%"
+    ],
+    [
+      1.591716,
+      null
+    ],
+    [
+      1.657718,
+      null
+    ],
+    [
+      1.1,
+      null
+    ]
+  ],
+  "is_correct": true,
+  "calculation_result": {
+    "kind": "ratio",
+    "expression": "(26900.0 / 16900.0)",
+    "value": 159.1716,
+    "unit": "%",
+    "fraction": 1.591716,
+    "difference": null,
+    "difference_unit": null,
+    "base": {
+      "value": 16900.0,
+      "unit": null,
+      "period": "",
+      "chunk_id": "54ecbc242d234326b577b5fe33316623"
+    },
+    "target": {
+      "value": 26900.0,
+      "unit": null,
+      "period": "",
+      "chunk_id": "54ecbc242d234326b577b5fe33316623"
+    },
+    "alternates": [
+      {
+        "fraction": 1.657718
+      },
+      {
+        "fraction": 1.1
+      }
+    ],
+    "error": null,
+    "evidence": [
+      "54ecbc242d234326b577b5fe33316623",
+      "54ecbc242d234326b577b5fe33316623"
+    ]
+  },
+  "tools_used": [
+    "retrieve",
+    "verify_claim_batch",
+    "expand_document",
+    "expand_document",
+    "expand_document",
+    "expand_document",
+    "expand_document",
+    "expand_document",
+    "expand_document",
+    "expand_document",
+    "expand_document",
+    "expand_document",
+    "calc_expression",
+    "calc_expression",
+    "calc_expression",
+    "calc_expression",
+    "calc_expression",
+    "calc_expression",
+    "calc_expression",
+    "calc_expression",
+    "calc_expression",
+    "calc_expression",
+    "calc_expression",
+    "calc_expression",
+    "calc_expression",
+    "calc_expression",
+    "calc_expression",
+    "calc_expression"
+  ],
+  "nodes": [
+    "planner",
+    "retriever",
+    "verifier",
+    "calculator",
+    "synthesizer"
+  ],
+  "verifier_decisions": [
+    "ACCEPT"
+  ],
+  "retrieved_docs": [
+    {
+      "chunk_id": "54ecbc242d234326b577b5fe33316623",
+      "doc_id": "AAL/2016/page_8.pdf-4",
+      "score": 1.0,
+      "content_head": ".\n\nTable data:\n|  | Mainline  Operations | Wholly-owned  Regional Carriers | Total\n| Pilots and Flight Crew Training Instructors | 13,400 | 3,400 | 16,800\n| Flight Attendants | 24,700 | 2,200 | 26,900"
+    },
+    {
+      "chunk_id": "9d197ecbd06345089394ab880be71229",
+      "doc_id": "AAL/2016/page_8.pdf-3",
+      "score": 1.0,
+      "content_head": ".\n\nTable data:\n|  | Mainline  Operations | Wholly-owned  Regional Carriers | Total\n| Pilots and Flight Crew Training Instructors | 13,400 | 3,400 | 16,800\n| Flight Attendants | 24,700 | 2,200 | 26,900"
+    },
+    {
+      "chunk_id": "6e666353e01c443593cfc4fa85c491dc",
+      "doc_id": "AAL/2016/page_8.pdf-2",
+      "score": 1.0,
+      "content_head": ".\n\nTable data:\n|  | Mainline  Operations | Wholly-owned  Regional Carriers | Total\n| Pilots and Flight Crew Training Instructors | 13,400 | 3,400 | 16,800\n| Flight Attendants | 24,700 | 2,200 | 26,900"
+    },
+    {
+      "chunk_id": "71f419fad70249f2868555906e806cbd",
+      "doc_id": "AAL/2016/page_8.pdf-1",
+      "score": 1.0,
+      "content_head": ".\n\nTable data:\n|  | Mainline  Operations | Wholly-owned  Regional Carriers | Total\n| Pilots and Flight Crew Training Instructors | 13,400 | 3,400 | 16,800\n| Flight Attendants | 24,700 | 2,200 | 26,900"
+    },
+    {
+      "chunk_id": "93444658be5c4d99aba7a69b09eeb053",
+      "doc_id": "AAL/2014/page_15.pdf-4",
+      "score": 0.9762832278987482,
+      "content_head": ".\n\nTable data:\n|  | American | US Airways | Wholly-owned Regional Carriers | Total\n| Pilots | 8,600 | 4,400 | 3,200 | 16,200\n| Flight attendants | 15,900 | 7,700 | 1,800 | 25,400\n| Maintenance personn"
+    },
+    {
+      "chunk_id": "97f7f04828fb46048e89b3507ca1e92c",
+      "doc_id": "AAL/2014/page_15.pdf-2",
+      "score": 0.9762832278987482,
+      "content_head": ".\n\nTable data:\n|  | American | US Airways | Wholly-owned Regional Carriers | Total\n| Pilots | 8,600 | 4,400 | 3,200 | 16,200\n| Flight attendants | 15,900 | 7,700 | 1,800 | 25,400\n| Maintenance personn"
+    },
+    {
+      "chunk_id": "45c3502e28044c37b7a27740f6d1b767",
+      "doc_id": "AAL/2014/page_15.pdf-1",
+      "score": 0.9762832278987482,
+      "content_head": ".\n\nTable data:\n|  | American | US Airways | Wholly-owned Regional Carriers | Total\n| Pilots | 8,600 | 4,400 | 3,200 | 16,200\n| Flight attendants | 15,900 | 7,700 | 1,800 | 25,400\n| Maintenance personn"
+    },
+    {
+      "chunk_id": "a10e79cb6311486f9e372d13932224b8",
+      "doc_id": "AAL/2014/page_15.pdf-3",
+      "score": 0.9762832278987482,
+      "content_head": ".\n\nTable data:\n|  | American | US Airways | Wholly-owned Regional Carriers | Total\n| Pilots | 8,600 | 4,400 | 3,200 | 16,200\n| Flight attendants | 15,900 | 7,700 | 1,800 | 25,400\n| Maintenance personn"
+    },
+    {
+      "chunk_id": "cf4a0d1fda644306834602a8655c0ff2",
+      "doc_id": "IP/2006/page_38.pdf-1",
+      "score": 0.2521319775774109,
+      "content_head": "public capital markets where we have a wide base of investors . the company was in compliance with all its debt covenants at december 31 , 2006 . principal financial covenants include maintenance of a"
+    },
+    {
+      "chunk_id": "a2a9eeb05a9b4caabd112fe1045f8ca1",
+      "doc_id": "IP/2006/page_38.pdf-2",
+      "score": 0.2521319775774109,
+      "content_head": "public capital markets where we have a wide base of investors . the company was in compliance with all its debt covenants at december 31 , 2006 . principal financial covenants include maintenance of a"
+    },
+    {
+      "chunk_id": "addf2102980d41658d3c2dab86a21f36",
+      "doc_id": "IP/2006/page_38.pdf-3",
+      "score": 0.2521319775774109,
+      "content_head": "public capital markets where we have a wide base of investors . the company was in compliance with all its debt covenants at december 31 , 2006 . principal financial covenants include maintenance of a"
+    },
+    {
+      "chunk_id": "687debdf94d049af8b2abe5035c1962d",
+      "doc_id": "IP/2006/page_38.pdf-4",
+      "score": 0.2521319775774109,
+      "content_head": "public capital markets where we have a wide base of investors . the company was in compliance with all its debt covenants at december 31 , 2006 . principal financial covenants include maintenance of a"
+    },
+    {
+      "chunk_id": "01d76f42202840ecb0f6b1c629481756",
+      "doc_id": "IP/2009/page_45.pdf-1",
+      "score": 0.21843229197721437,
+      "content_head": "contractually committed revolving bank credit agreement and $ 1.0 billion of commercial paper- based financing based on eligible receivable balan- ces under a receivables securitization program , whic"
+    },
+    {
+      "chunk_id": "b39aa74e673f4bb98e7a7baef3df1be2",
+      "doc_id": "IP/2009/page_45.pdf-2",
+      "score": 0.21843229197721437,
+      "content_head": "contractually committed revolving bank credit agreement and $ 1.0 billion of commercial paper- based financing based on eligible receivable balan- ces under a receivables securitization program , whic"
+    },
+    {
+      "chunk_id": "1328d3d4a15a43688273d528442185fc",
+      "doc_id": "IP/2009/page_45.pdf-3",
+      "score": 0.21843229197721437,
+      "content_head": "contractually committed revolving bank credit agreement and $ 1.0 billion of commercial paper- based financing based on eligible receivable balan- ces under a receivables securitization program , whic"
+    },
+    {
+      "chunk_id": "8e410998da994b168a2f232932542d7a",
+      "doc_id": "IP/2009/page_45.pdf-4",
+      "score": 0.21843229197721437,
+      "content_head": "contractually committed revolving bank credit agreement and $ 1.0 billion of commercial paper- based financing based on eligible receivable balan- ces under a receivables securitization program , whic"
+    },
+    {
+      "chunk_id": "6d1482e139e5427989d599c0e354c48b",
+      "doc_id": "GS/2013/page_63.pdf-1",
+      "score": 0.19322779024189343,
+      "content_head": "leverage ratio .\nthe leverage ratio equals total assets divided by total shareholders 2019 equity and measures the proportion of equity and debt the firm is using to finance assets .\nthis ratio is dif"
+    },
+    {
+      "chunk_id": "a17cf3c376524ba08f6b172abdf037c3",
+      "doc_id": "GS/2013/page_63.pdf-2",
+      "score": 0.19322779024189343,
+      "content_head": "leverage ratio .\nthe leverage ratio equals total assets divided by total shareholders 2019 equity and measures the proportion of equity and debt the firm is using to finance assets .\nthis ratio is dif"
+    },
+    {
+      "chunk_id": "ff53583d19254cc1a456672608d8b238",
+      "doc_id": "GS/2013/page_63.pdf-3",
+      "score": 0.19322779024189343,
+      "content_head": "leverage ratio .\nthe leverage ratio equals total assets divided by total shareholders 2019 equity and measures the proportion of equity and debt the firm is using to finance assets .\nthis ratio is dif"
+    },
+    {
+      "chunk_id": "481bbff7e27e48acb1a7036d3a041718",
+      "doc_id": "AES/2001/page_85.pdf-1",
+      "score": 0.05014757978147249,
+      "content_head": "covenants 2014the terms of the company 2019s recourse debt , including the revolving bank loan , senior and subordinated notes contain certain restrictive financial and non-financial covenants .\nthe f"
+    },
+    {
+      "chunk_id": "008325c451a5457d89de7306f1c36307",
+      "doc_id": "AES/2001/page_85.pdf-4",
+      "score": 0.05014757978147249,
+      "content_head": "covenants 2014the terms of the company 2019s recourse debt , including the revolving bank loan , senior and subordinated notes contain certain restrictive financial and non-financial covenants .\nthe f"
+    },
+    {
+      "chunk_id": "fdf334ce4db24b12991b1aa1034512de",
+      "doc_id": "AES/2001/page_85.pdf-2",
+      "score": 0.05014757978147249,
+      "content_head": "covenants 2014the terms of the company 2019s recourse debt , including the revolving bank loan , senior and subordinated notes contain certain restrictive financial and non-financial covenants .\nthe f"
+    },
+    {
+      "chunk_id": "0c8e54c2336c4ef7a6bc7c0c992fafe5",
+      "doc_id": "AES/2001/page_85.pdf-3",
+      "score": 0.05014757978147249,
+      "content_head": "covenants 2014the terms of the company 2019s recourse debt , including the revolving bank loan , senior and subordinated notes contain certain restrictive financial and non-financial covenants .\nthe f"
+    },
+    {
+      "chunk_id": "8f18d755f1514dd8b5b4261badc01fc2",
+      "doc_id": "AAL/2010/page_72.pdf-3",
+      "score": 0.0,
+      "content_head": "during 2008 , amr recorded a settlement charge totaling $ 103 million related to lump sum distributions from the company 2019s defined benefit pension plans to pilots who retired .\npursuant to u.s .\ng"
+    },
+    {
+      "chunk_id": "e64b49f9ed8845619fa85c9e3daf219c",
+      "doc_id": "AAL/2010/page_72.pdf-1",
+      "score": 0.0,
+      "content_head": "during 2008 , amr recorded a settlement charge totaling $ 103 million related to lump sum distributions from the company 2019s defined benefit pension plans to pilots who retired .\npursuant to u.s .\ng"
+    }
+  ],
+  "verify_flags": {
+    "what is the ratio of the total flight attendants to total maintenance personnel": {
+      "claim": {
+        "entity": null,
+        "period": null,
+        "metric": null,
+        "definition": null
+      },
+      "results": [
+        {
+          "chunk_id": "54ecbc242d234326b577b5fe33316623",
+          "passed": true,
+          "entity_match": null,
+          "period_match": null,
+          "metric_match": null,
+          "definition_match": null,
+          "mismatches": [],
+          "missing": [],
+          "confidence": 0.0,
+          "value": 13400.0,
+          "unit": null,
+          "period": null,
+          "source_type": "unknown",
+          "is_table": true
+        },
+        {
+          "chunk_id": "9d197ecbd06345089394ab880be71229",
+          "passed": true,
+          "entity_match": null,
+          "period_match": null,
+          "metric_match": null,
+          "definition_match": null,
+          "mismatches": [],
+          "missing": [],
+          "confidence": 0.0,
+          "value": 13400.0,
+          "unit": null,
+          "period": null,
+          "source_type": "unknown",
+          "is_table": true
+        },
+        {
+          "chunk_id": "6e666353e01c443593cfc4fa85c491dc",
+          "passed": true,
+          "entity_match": null,
+          "period_match": null,
+          "metric_match": null,
+          "definition_match": null,
+          "mismatches": [],
+          "missing": [],
+          "confidence": 0.0,
+          "value": 13400.0,
+          "unit": null,
+          "period": null,
+          "source_type": "unknown",
+          "is_table": true
+        },
+        {
+          "chunk_id": "71f419fad70249f2868555906e806cbd",
+          "passed": true,
+          "entity_match": null,
+          "period_match": null,
+          "metric_match": null,
+          "definition_match": null,
+          "mismatches": [],
+          "missing": [],
+          "confidence": 0.0,
+          "value": 13400.0,
+          "unit": null,
+          "period": null,
+          "source_type": "unknown",
+          "is_table": true
+        },
+        {
+          "chunk_id": "93444658be5c4d99aba7a69b09eeb053",
+          "passed": true,
+          "entity_match": null,
+          "period_match": null,
+          "metric_match": null,
+          "definition_match": null,
+          "mismatches": [],
+          "missing": [],
+          "confidence": 0.0,
+          "value": 8600.0,
+          "unit": null,
+          "period": null,
+          "source_type": "unknown",
+          "is_table": true
+        },
+        {
+          "chunk_id": "97f7f04828fb46048e89b3507ca1e92c",
+          "passed": true,
+          "entity_match": null,
+          "period_match": null,
+          "metric_match": null,
+          "definition_match": null,
+          "mismatches": [],
+          "missing": [],
+          "confidence": 0.0,
+          "value": 8600.0,
+          "unit": null,
+          "period": null,
+          "source_type": "unknown",
+          "is_table": true
+        },
+        {
+          "chunk_id": "45c3502e28044c37b7a27740f6d1b767",
+          "passed": true,
+          "entity_match": null,
+          "period_match": null,
+          "metric_match": null,
+          "definition_match": null,
+          "mismatches": [],
+          "missing": [],
+          "confidence": 0.0,
+          "value": 8600.0,
+          "unit": null,
+          "period": null,
+          "source_type": "unknown",
+          "is_table": true
+        },
+        {
+          "chunk_id": "a10e79cb6311486f9e372d13932224b8",
+          "passed": true,
+          "entity_match": null,
+          "period_match": null,
+          "metric_match": null,
+          "definition_match": null,
+          "mismatches": [],
+          "missing": [],
+          "confidence": 0.0,
+          "value": 8600.0,
+          "unit": null,
+          "period": null,
+          "source_type": "unknown",
+          "is_table": true
+        },
+        {
+          "chunk_id": "cf4a0d1fda644306834602a8655c0ff2",
+          "passed": true,
+          "entity_match": null,
+          "period_match": null,
+          "metric_match": null,
+          "definition_match": null,
+          "mismatches": [],
+          "missing": [],
+          "confidence": 0.0,
+          "value": 31.0,
+          "unit": null,
+          "period": "2006",
+          "source_type": "unknown",
+          "is_table": false
+        },
+        {
+          "chunk_id": "a2a9eeb05a9b4caabd112fe1045f8ca1",
+          "passed": true,
+          "entity_match": null,
+          "period_match": null,
+          "metric_match": null,
+          "definition_match": null,
+          "mismatches": [],
+          "missing": [],
+          "confidence": 0.0,
+          "value": 31.0,
+          "unit": null,
+          "period": "2006",
+          "source_type": "unknown",
+          "is_table": false
+        },
+        {
+          "chunk_id": "addf2102980d41658d3c2dab86a21f36",
+          "passed": true,
+          "entity_match": null,
+          "period_match": null,
+          "metric_match": null,
+          "definition_match": null,
+          "mismatches": [],
+          "missing": [],
+          "confidence": 0.0,
+          "value": 31.0,
+          "unit": null,
+          "period": "2006",
+          "source_type": "unknown",
+          "is_table": false
+        },
+        {
+          "chunk_id": "687debdf94d049af8b2abe5035c1962d",
+          "passed": true,
+          "entity_match": null,
+          "period_match": null,
+          "metric_match": null,
+          "definition_match": null,
+          "mismatches": [],
+          "missing": [],
+          "confidence": 0.0,
+          "value": 31.0,
+          "unit": null,
+          "period": "2006",
+          "source_type": "unknown",
+          "is_table": false
+        },
+        {
+          "chunk_id": "01d76f42202840ecb0f6b1c629481756",
+          "passed": true,
+          "entity_match": null,
+          "period_match": null,
+          "metric_match": null,
+          "definition_match": null,
+          "mismatches": [],
+          "missing": [],
+          "confidence": 0.0,
+          "value": 31.0,
+          "unit": null,
+          "period": "2009",
+          "source_type": "unknown",
+          "is_table": false
+        },
+        {
+          "chunk_id": "b39aa74e673f4bb98e7a7baef3df1be2",
+          "passed": true,
+          "entity_match": null,
+          "period_match": null,
+          "metric_match": null,
+          "definition_match": null,
+          "mismatches": [],
+          "missing": [],
+          "confidence": 0.0,
+          "value": 31.0,
+          "unit": null,
+          "period": "2009",
+          "source_type": "unknown",
+          "is_table": false
+        },
+        {
+          "chunk_id": "1328d3d4a15a43688273d528442185fc",
+          "passed": true,
+          "entity_match": null,
+          "period_match": null,
+          "metric_match": null,
+          "definition_match": null,
+          "mismatches": [],
+          "missing": [],
+          "confidence": 0.0,
+          "value": 31.0,
+          "unit": null,
+          "period": "2009",
+          "source_type": "unknown",
+          "is_table": false
+        },
+        {
+          "chunk_id": "8e410998da994b168a2f232932542d7a",
+          "passed": true,
+          "entity_match": null,
+          "period_match": null,
+          "metric_match": null,
+          "definition_match": null,
+          "mismatches": [],
+          "missing": [],
+          "confidence": 0.0,
+          "value": 31.0,
+          "unit": null,
+          "period": "2009",
+          "source_type": "unknown",
+          "is_table": false
+        },
+        {
+          "chunk_id": "6d1482e139e5427989d599c0e354c48b",
+          "passed": true,
+          "entity_match": null,
+          "period_match": null,
+          "metric_match": null,
+          "definition_match": null,
+          "mismatches": [],
+          "missing": [],
+          "confidence": 0.0,
+          "value": 61.0,
+          "unit": null,
+          "period": "2013",
+          "source_type": "unknown",
+          "is_table": true
+        },
+        {
+          "chunk_id": "a17cf3c376524ba08f6b172abdf037c3",
+          "passed": true,
+          "entity_match": null,
+          "period_match": null,
+          "metric_match": null,
+          "definition_match": null,
+          "mismatches": [],
+          "missing": [],
+          "confidence": 0.0,
+          "value": 61.0,
+          "unit": null,
+          "period": "2013",
+          "source_type": "unknown",
+          "is_table": true
+        },
+        {
+          "chunk_id": "ff53583d19254cc1a456672608d8b238",
+          "passed": true,
+          "entity_match": null,
+          "period_match": null,
+          "metric_match": null,
+          "definition_match": null,
+          "mismatches": [],
+          "missing": [],
+          "confidence": 0.0,
+          "value": 61.0,
+          "unit": null,
+          "period": "2013",
+          "source_type": "unknown",
+          "is_table": true
+        },
+        {
+          "chunk_id": "481bbff7e27e48acb1a7036d3a041718",
+          "passed": true,
+          "entity_match": null,
+          "period_match": null,
+          "metric_match": null,
+          "definition_match": null,
+          "mismatches": [],
+          "missing": [],
+          "confidence": 0.0,
+          "value": 31.0,
+          "unit": null,
+          "period": "2001",
+          "source_type": "unknown",
+          "is_table": true
+        },
+        {
+          "chunk_id": "008325c451a5457d89de7306f1c36307",
+          "passed": true,
+          "entity_match": null,
+          "period_match": null,
+          "metric_match": null,
+          "definition_match": null,
+          "mismatches": [],
+          "missing": [],
+          "confidence": 0.0,
+          "value": 31.0,
+          "unit": null,
+          "period": "2001",
+          "source_type": "unknown",
+          "is_table": true
+        },
+        {
+          "chunk_id": "fdf334ce4db24b12991b1aa1034512de",
+          "passed": true,
+          "entity_match": null,
+          "period_match": null,
+          "metric_match": null,
+          "definition_match": null,
+          "mismatches": [],
+          "missing": [],
+          "confidence": 0.0,
+          "value": 31.0,
+          "unit": null,
+          "period": "2001",
+          "source_type": "unknown",
+          "is_table": true
+        },
+        {
+          "chunk_id": "0c8e54c2336c4ef7a6bc7c0c992fafe5",
+          "passed": true,
+          "entity_match": null,
+          "period_match": null,
+          "metric_match": null,
+          "definition_match": null,
+          "mismatches": [],
+          "missing": [],
+          "confidence": 0.0,
+          "value": 31.0,
+          "unit": null,
+          "period": "2001",
+          "source_type": "unknown",
+          "is_table": true
+        },
+        {
+          "chunk_id": "8f18d755f1514dd8b5b4261badc01fc2",
+          "passed": true,
+          "entity_match": null,
+          "period_match": null,
+          "metric_match": null,
+          "definition_match": null,
+          "mismatches": [],
+          "missing": [],
+          "confidence": 0.0,
+          "value": 11.0,
+          "unit": null,
+          "period": "2010",
+          "source_type": "unknown",
+          "is_table": false
+        },
+        {
+          "chunk_id": "e64b49f9ed8845619fa85c9e3daf219c",
+          "passed": true,
+          "entity_match": null,
+          "period_match": null,
+          "metric_match": null,
+          "definition_match": null,
+          "mismatches": [],
+          "missing": [],
+          "confidence": 0.0,
+          "value": 11.0,
+          "unit": null,
+          "period": "2010",
+          "source_type": "unknown",
+          "is_table": false
+        }
+      ],
+      "passed_count": 25,
+      "total_count": 25,
+      "decision": "ACCEPT",
+      "passed": true,
+      "confidence": 0.0,
+      "conflict": {
+        "level": "major",
+        "conflict": true,
+        "reconciled_value": 13400.0,
+        "reconciled_unit": null,
+        "note": "unconstrained claim: top-ranked evidence value selected",
+        "preference_note": null,
+        "values": [
+          {
+            "chunk_id": "54ecbc242d234326b577b5fe33316623",
+            "value": 13400.0,
+            "unit": null,
+            "base_value": 13400.0,
+            "base_unit": "million",
+            "year": null,
+            "source_type": "unknown"
+          },
+          {
+            "chunk_id": "9d197ecbd06345089394ab880be71229",
+            "value": 13400.0,
+            "unit": null,
+            "base_value": 13400.0,
+            "base_unit": "million",
+            "year": null,
+            "source_type": "unknown"
+          },
+          {
+            "chunk_id": "6e666353e01c443593cfc4fa85c491dc",
+            "value": 13400.0,
+            "unit": null,
+            "base_value": 13400.0,
+            "base_unit": "million",
+            "year": null,
+            "source_type": "unknown"
+          },
+          {
+            "chunk_id": "71f419fad70249f2868555906e806cbd",
+            "value": 13400.0,
+            "unit": null,
+            "base_value": 13400.0,
+            "base_unit": "million",
+            "year": null,
+            "source_type": "unknown"
+          },
+          {
+            "chunk_id": "93444658be5c4d99aba7a69b09eeb053",
+            "value": 8600.0,
+            "unit": null,
+            "base_value": 8600.0,
+            "base_unit": "million",
+            "year": null,
+            "source_type": "unknown"
+          },
+          {
+            "chunk_id": "97f7f04828fb46048e89b3507ca1e92c",
+            "value": 8600.0,
+            "unit": null,
+            "base_value": 8600.0,
+            "base_unit": "million",
+            "year": null,
+            "source_type": "unknown"
+          },
+          {
+            "chunk_id": "45c3502e28044c37b7a27740f6d1b767",
+            "value": 8600.0,
+            "unit": null,
+            "base_value": 8600.0,
+            "base_unit": "million",
+            "year": null,
+            "source_type": "unknown"
+          },
+          {
+            "chunk_id": "a10e79cb6311486f9e372d13932224b8",
+            "value": 8600.0,
+            "unit": null,
+            "base_value": 8600.0,
+            "base_unit": "million",
+            "year": null,
+            "source_type": "unknown"
+          },
+          {
+            "chunk_id": "cf4a0d1fda644306834602a8655c0ff2",
+            "value": 31.0,
+            "unit": null,
+            "base_value": 31.0,
+            "base_unit": "million",
+            "year": 2006,
+            "source_type": "unknown"
+          },
+          {
+            "chunk_id": "a2a9eeb05a9b4caabd112fe1045f8ca1",
+            "value": 31.0,
+            "unit": null,
+            "base_value": 31.0,
+            "base_unit": "million",
+            "year": 2006,
+            "source_type": "unknown"
+          },
+          {
+            "chunk_id": "addf2102980d41658d3c2dab86a21f36",
+            "value": 31.0,
+            "unit": null,
+            "base_value": 31.0,
+            "base_unit": "million",
+            "year": 2006,
+            "source_type": "unknown"
+          },
+          {
+            "chunk_id": "687debdf94d049af8b2abe5035c1962d",
+            "value": 31.0,
+            "unit": null,
+            "base_value": 31.0,
+            "base_unit": "million",
+            "year": 2006,
+            "source_type": "unknown"
+          },
+          {
+            "chunk_id": "01d76f42202840ecb0f6b1c629481756",
+            "value": 31.0,
+            "unit": null,
+            "base_value": 31.0,
+            "base_unit": "million",
+            "year": 2009,
+            "source_type": "unknown"
+          },
+          {
+            "chunk_id": "b39aa74e673f4bb98e7a7baef3df1be2",
+            "value": 31.0,
+            "unit": null,
+            "base_value": 31.0,
+            "base_unit": "million",
+            "year": 2009,
+            "source_type": "unknown"
+          },
+          {
+            "chunk_id": "1328d3d4a15a43688273d528442185fc",
+            "value": 31.0,
+            "unit": null,
+            "base_value": 31.0,
+            "base_unit": "million",
+            "year": 2009,
+            "source_type": "unknown"
+          },
+          {
+            "chunk_id": "8e410998da994b168a2f232932542d7a",
+            "value": 31.0,
+            "unit": null,
+            "base_value": 31.0,
+            "base_unit": "million",
+            "year": 2009,
+            "source_type": "unknown"
+          },
+          {
+            "chunk_id": "6d1482e139e5427989d599c0e354c48b",
+            "value": 61.0,
+            "unit": null,
+            "base_value": 61.0,
+            "base_unit": "million",
+            "year": 2013,
+            "source_type": "unknown"
+          },
+          {
+            "chunk_id": "a17cf3c376524ba08f6b172abdf037c3",
+            "value": 61.0,
+            "unit": null,
+            "base_value": 61.0,
+            "base_unit": "million",
+            "year": 2013,
+            "source_type": "unknown"
+          },
+          {
+            "chunk_id": "ff53583d19254cc1a456672608d8b238",
+            "value": 61.0,
+            "unit": null,
+            "base_value": 61.0,
+            "base_unit": "million",
+            "year": 2013,
+            "source_type": "unknown"
+          },
+          {
+            "chunk_id": "481bbff7e27e48acb1a7036d3a041718",
+            "value": 31.0,
+            "unit": null,
+            "base_value": 31.0,
+            "base_unit": "million",
+            "year": 2001,
+            "source_type": "unknown"
+          },
+          {
+            "chunk_id": "008325c451a5457d89de7306f1c36307",
+            "value": 31.0,
+            "unit": null,
+            "base_value": 31.0,
+            "base_unit": "million",
+            "year": 2001,
+            "source_type": "unknown"
+          },
+          {
+            "chunk_id": "fdf334ce4db24b12991b1aa1034512de",
+            "value": 31.0,
+            "unit": null,
+            "base_value": 31.0,
+            "base_unit": "million",
+            "year": 2001,
+            "source_type": "unknown"
+          },
+          {
+            "chunk_id": "0c8e54c2336c4ef7a6bc7c0c992fafe5",
+            "value": 31.0,
+            "unit": null,
+            "base_value": 31.0,
+            "base_unit": "million",
+            "year": 2001,
+            "source_type": "unknown"
+          },
+          {
+            "chunk_id": "8f18d755f1514dd8b5b4261badc01fc2",
+            "value": 11.0,
+            "unit": null,
+            "base_value": 11.0,
+            "base_unit": "million",
+            "year": 2010,
+            "source_type": "unknown"
+          },
+          {
+            "chunk_id": "e64b49f9ed8845619fa85c9e3daf219c",
+            "value": 11.0,
+            "unit": null,
+            "base_value": 11.0,
+            "base_unit": "million",
+            "year": 2010,
+            "source_type": "unknown"
+          }
+        ]
+      },
+      "sub_task_index": 0
+    }
+  }
+}
