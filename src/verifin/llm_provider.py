@@ -259,9 +259,10 @@ def make_llm_stack(
     结构；端点不支持时 provider 自动摘除回退，行为与 False 完全一致。
     仅 OpenAI 兼容直连通道生效（桥接通道协议固定为纯文本）。
     """
-    from verifin.core.llm_planner import LLMPlanner, PLANNER_RESPONSE_FORMAT
+    from verifin.core.llm_planner import PLANNER_RESPONSE_FORMAT, LLMPlanner
     from verifin.tools.llm_programmer import (
-        LLMProgramGenerator, PROGRAMMER_RESPONSE_FORMAT,
+        PROGRAMMER_RESPONSE_FORMAT,
+        LLMProgramGenerator,
     )
 
     def _make(kind: str, response_format: Optional[dict]):

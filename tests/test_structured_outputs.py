@@ -11,8 +11,6 @@ import io
 import json
 import urllib.error
 
-import pytest
-
 from verifin.core.llm_planner import PLANNER_RESPONSE_FORMAT
 from verifin.llm_provider import OpenAICompatLLM, make_llm_stack
 from verifin.tools.llm_programmer import PROGRAMMER_RESPONSE_FORMAT
