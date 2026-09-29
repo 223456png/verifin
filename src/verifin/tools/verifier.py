@@ -1,6 +1,6 @@
 """四要素校验器：Entity / Period / Metric / Definition 逐项比对（不依赖 LangGraph）。
 
-匹配规则（docs/designs/2026-08-29-phase-4-verifin-verifier-tools-design.md §4.4）：
+匹配规则：
 - Entity：大小写不敏感精确匹配 → 词边界包含匹配（"Nova" in "NovaTech" 因边界拒绝）；
 - Period：双方 4 位年份集合取交集（FY2024 ⊇ 2024）；
 - Metric：指标词典 canonical key 相等（同义词归一）；

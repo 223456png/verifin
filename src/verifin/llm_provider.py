@@ -1,12 +1,12 @@
 """LLM provider（Phase 12.3）：``complete(prompt) -> str`` 的两种实现。
 
-1. :class:`BridgedLLM`——本地桥接服务（scripts/llm_bridge.mjs，z-ai SDK）；
-2. :class:`OpenAICompatLLM`——任意 OpenAI 兼容端点直连（DeepSeek 等，
+1. :class:`BridgedLLM`：本地 HTTP 桥接服务（早期实验通道，服务端不随仓库分发）；
+2. :class:`OpenAICompatLLM`：任意 OpenAI 兼容端点直连（DeepSeek 等，
    ``POST {base}/chat/completions``，Bearer 鉴权）。
 
 设计契约（与 :class:`verifin.core.llm_planner.LLMPlanner` /
 :class:`verifin.tools.llm_programmer.LLMProgramGenerator` 对齐）：
-- ``complete`` **永不抛异常**——失败返回空串，调用方解析层把空串判非法
+- ``complete`` 永不抛异常：失败返回空串，由调用方解析层判非法
   并走确定性降级（plan 返回 None / generate 返回 None）；
 - 每次调用记录 (kind, latency_ms, 字符数, ok, error)，``dump_stats()``
   落盘供成本/延迟归因；
@@ -115,7 +115,7 @@ class OpenAICompatLLM(_BaseProvider):
     """OpenAI 兼容直连（DeepSeek 等）：temperature=0，JSON 友好。
 
     ``chat``（Phase 13）：messages + tools 的 function calling 协议，
-    供 :class:`verifin.harness.ToolCallingHarness` 使用——失败返回 ``None``
+    供 :class:`verifin.harness.ToolCallingHarness` 使用，失败返回 ``None``
     （harness 视为 llm_error 停机），与 ``complete`` 的空串降级契约分层。
     """
 
@@ -135,7 +135,7 @@ class OpenAICompatLLM(_BaseProvider):
         self.kind = kind
         # Structured Outputs（Phase 13.1）：response_format 透传（OpenAI
         # ``json_schema`` strict / DeepSeek ``json_object`` 均可）。端点
-        # 返回 400/422（不支持该参数）时自动摘除并立即重试一次——平滑回退
+        # 返回 400/422（不支持该参数）时自动摘除并立即重试一次，平滑回退
         # 到普通补全，不消耗指数退避的完整重试预算。
         self.response_format = response_format
 
@@ -252,10 +252,10 @@ def make_llm_stack(
 ) -> tuple:
     """按 mode 与通道构造 (llm_planner, llm_programmer, providers)。
 
-    mode: ``both`` | ``planner`` | ``programmer``——单变量消融用。
+    mode: ``both`` | ``planner`` | ``programmer``，单变量消融用。
     通道二选一：``bridge_url``（本地桥接）或 ``api_key``（OpenAI 兼容直连）。
     json_schema: True 时给两个 provider 注入各自的 response_format
-    （Structured Outputs，Phase 13.1）——模型层保证输出为合法 JSON schema
+    （Structured Outputs，Phase 13.1）：模型层保证输出为合法 JSON schema
     结构；端点不支持时 provider 自动摘除回退，行为与 False 完全一致。
     仅 OpenAI 兼容直连通道生效（桥接通道协议固定为纯文本）。
     """

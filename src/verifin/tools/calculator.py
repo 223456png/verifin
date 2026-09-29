@@ -1,6 +1,6 @@
 """PoT 计算器：受限表达式安全求值（不依赖 LangGraph）。
 
-三层防御（docs/designs/2026-08-29-phase-4 §3 D7）：
+三层防御：
 - Layer 1: ``ast.parse(mode="eval")`` + 节点白名单（拒绝 Import/Attribute/未注册调用等）；
 - Layer 2: ``eval`` 命名空间禁用 ``__builtins__``，仅暴露 math 函数白名单；
 - Layer 3: SIGALRM 超时（仅主线程生效）+ 决定性 guard（长度/指数上限）保证快速确定拒绝。

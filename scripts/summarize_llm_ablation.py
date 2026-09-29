@@ -40,7 +40,7 @@ for name, d in RUNS.items():
     rows.append((name, f"{ok}/{len(r)} = {100*ok/len(r):.1f}%", dict(errs)))
     details.append((name, r))
 
-lines = ["# LLM 消融对比（100 样本，降级 reranker 口径，GLM via z-ai 桥接）", ""]
+lines = ["# LLM 消融对比（100 样本，降级 reranker 口径，本地桥接端点）", ""]
 for name, acc, errs in rows:
     lines.append(f"- **{name}**: {acc or '未完成'} | 错误分布: {errs or '-'}")
 

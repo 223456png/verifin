@@ -372,8 +372,6 @@ src/verifin/
 
 | 路径 | 内容 |
 |---|---|
-| [`docs/designs/`](docs/designs/) | 10 个 Phase 的迭代设计记录——问题定义、方案、验收标准 |
-| [`docs/plans/`](docs/plans/) | 8 份实施计划与工作流 |
 | [`docs/EVALUATION.md`](docs/EVALUATION.md) | 评测结论汇总、关键工程改动归因与诚实边界 |
 
 ---

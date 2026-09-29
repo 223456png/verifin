@@ -1,6 +1,6 @@
 """复杂表格解析扩展（不依赖 LangGraph；复用 evidence 的 TableSpec/parse_tables）。
 
-新增能力（Phase 6，docs/designs/2026-08-29-phase-6 §D7）：
+新增能力（Phase 6）：
 - **旋转表头**：指标在顶行、年份在第一列 → (metric, period) → value；
 - **水平多级表头**：指标行 × 年份行交叉索引 → (metric, period) → value；
 - **跨页拼接**：续页表头归一（Item (Cont.) ≡ Item）+ 剔除重复表头行与完全重复行。
