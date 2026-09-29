@@ -130,6 +130,11 @@ LangGraph 多智能体金融证据校验 RAG 系统：BM25 + Dense 混合检索�
 2. **LLM-as-judge**（DeepSeek，40 样本子集，0 调用失败）：faithfulness + relevancy 逐样本判定，证据锚定四要素校验通过池。
 3. **分层发现**：答错 27 题 faithfulness **0%**（噪声证据放行后算错值——verifier 精度弱点的直接实证）；答对 11 题 36%（judge 证据切片 6/32 偏窄）；judge 与 EM 一致性 82%。
 
+### Phase 13 / 13.1：Tool-Calling Harness 与 Structured Outputs（能力层，不进评测口径）
+
+1. **架构定位（诚实分层）**：`ToolCallingHarness` 是与固定状态机互补的**开放任务能力层**——LLM 按 OpenAI function calling 协议自主决定调什么工具、何时停（三停机条件：finished / max_turns / llm_error）。**它与 graph 的确定性路由不在同一评测口径**：EM 基线全部来自 graph 流水线（LLM planner 自由分解 24% < 规则混合 29% 的消融数据支撑确定性路由的选择），harness 不参与 EM 数字，因此本文件的指标表不含 Phase 13 行——这是口径隔离，不是漏测（harness 行为由 17 项单测锁定：调度、回喂、三停机）。
+2. **Phase 13.1 Structured Outputs**：`response_format` 透传（OpenAI `json_schema` strict 形态，planner / programmer 各自 schema：`financial_plan` / `dsl_program`），端点不支持时自动摘除回退（400/422 即摘、不吃退避预算），`--json-schema` 消融开关。8 项测试锁定透传 / 回退 / 接线语义；**真实评测数字待跑**（需 LLM key，见第五节回溯索引说明）。
+
 ---
 
 ## 四、已知局限与诚实边界
