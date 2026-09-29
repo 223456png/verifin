@@ -19,7 +19,6 @@ from verifin.schemas import ToolCall
 from verifin.tools.calculator import calc_expression
 from verifin.tools.registry import ToolRegistry
 
-
 # ----------------------------------------------------------------------
 # 测试基建
 # ----------------------------------------------------------------------
