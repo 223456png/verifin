@@ -12,6 +12,7 @@
 - **文档**：`docs/EVALUATION.md` —— 评测结论、逐阶段工程归因与已知局限的集中汇总
 - `pyproject.toml`：补齐 `authors` / `keywords` / `classifiers` / `[project.urls]`，新增 `verifin-mcp` 入口点与 `[tool.ruff]` / `[tool.coverage]` 配置
 - README：新增 TL;DR、MCP Server 章节（工具表 + 客户端配置 + 安全边界）、Docker 与 MCP 启动方式
+- **核心消融数字链证据入库**（`results_v*/report.md` + LLM 调用摘要，`full/` 逐样本产物不入库）；`docs/EVALUATION.md` 回溯索引新增「证据状态」列
 
 ### Changed
 
@@ -24,6 +25,29 @@
 ### Removed
 
 - `results/resume_numbers.md` —— 内容改写为 `docs/EVALUATION.md`（中性化的评测与局限文档）
+
+---
+
+## [0.13.1] — 2026-09-29 · Structured Outputs + 消融实证
+
+### Added
+
+- **最小 Tool-Calling Harness（Phase 13）**：`verifin.harness.ToolCallingHarness` —— LLM 按 OpenAI function calling 协议自主调度 `ToolRegistry` 工具，tool 消息回喂自主纠正，三停机条件（finished / max_turns / llm_error）防死循环；17 项单测锁定调度 / 回喂 / 停机语义。定位为与 graph 确定性路由互补的**开放任务能力层**，不进 EM 评测口径（见 `docs/EVALUATION.md` Phase 13 章节）
+- **LLM 调用接 Structured Outputs（Phase 13.1）**：`response_format` 透传（OpenAI `json_schema` strict 形态；planner schema `financial_plan` / programmer schema `dsl_program`），端点不支持时自动摘除回退（400/422 即摘、不吃退避预算），`--json-schema` 消融开关；8 项测试锁定透传 / 回退 / 接线语义
+- **`--json-schema` 单变量消融实测**（FinQA test 100 样本、programmer 模式、DeepSeek 直连，vs v125 基线）：**EM 31.0% vs 30.0%**（+1pp = 多对 1 题，噪声量级）；LLM 调用 44/44 成功、attempt=1 零重试（基线 45/45 同为 100%——宽容解析在 DeepSeek 上本已零失败，json-schema 买到的是**确定性 schema 保证**而非实测解析救回）；代价 = 平均延迟 524.7ms → 713.2ms（**+36%**）。证据：`results_v13_js/`
+
+### 副产物
+
+- **无 LLM 降级基线 EM 22.0%**（key 失效轮：176 次调用全 401、系统静默降级）——与 v122_norank 规则基线 21.0% 吻合，反向验证降级架构：LLM 全挂时管线不崩、EM 回到确定性模板水平
+
+---
+
+## [0.12.5] — 2026-09-04 · 实体门控 + 实体链接负向结果
+
+### Added
+
+- **实体门控激活（Phase 12.5）**：claim 实体缺失的定量修复，EM 29.0% → 30.0%（v125）
+- **LLM 辅助实体链接（Phase 12.5b，诚实负向结果）**：v126 实测 EM 29.0%（-1），链接器仅激活 1/100——内容实体候选稀疏（公司名多在 doc_id 而非正文），根因定性为信息论边界；代码保留（缓存 + 校验 + 降级完备）。证据：`results_v125/`、`results_v126/`
 
 ---
 
