@@ -1,26 +1,26 @@
 """Minimal tool-calling harness（Phase 13）：LLM 自主决定工具调用的通用循环。
 
-与 :mod:`verifin.core.graph` 的固定状态机**互补而非替代**：
+与 :mod:`verifin.core.graph` 的固定状态机互补而非替代：
 
 - graph = 确定性路由（规则 planner + 模板执行），可评测、可复现，是 EM 基线；
 - harness = 模型驱动循环（OpenAI function calling 协议），模型自己决定
   「调什么工具、什么时候停」，适用于规则流程覆盖不了的开放任务。
 
-设计约束（~150 行，零框架依赖）：
+设计约束（约 150 行，零框架依赖）：
 
-- **协议最小化**：LLM 侧只需实现 ``chat(messages, tools) -> dict | None``——
+- 协议最小化：LLM 侧只需实现 ``chat(messages, tools) -> dict | None``——
   返回 ``{"content": str, "tool_calls": [{"id", "name", "args"}]}``，失败返回
   ``None``（与 :meth:`verifin.llm_provider.OpenAICompatLLM.chat` 对齐，
   永不抛异常契约同源）；
-- **工具层复用** :class:`verifin.tools.registry.ToolRegistry`，与 graph 节点
+- 工具层复用 :class:`verifin.tools.registry.ToolRegistry`，与 graph 节点
   共用同一套工具注册 / 执行 / 历史记录，无第二套抽象；
-- **三停机条件**：模型不再请求工具（finished）/ 轮数上限（max_turns，防
+- 三停机条件：模型不再请求工具（finished）/ 轮数上限（max_turns，防
   死循环）/ LLM 失败（llm_error，answer 为空串由上层决定降级）；
-- **工具错误回喂**：未知工具 / 执行异常不中断循环，错误以 tool 消息回喂
+- 工具错误回喂：未知工具 / 执行异常不中断循环，错误以 tool 消息回喂
   给模型自主纠正（ReAct 的核心收益）。
 
-诚实边界：harness 未接入 benchmark 基线（graph 的 29.0% EM 是系统成绩，
-harness 是能力层，混跑会污染口径）；其行为契约由 mock provider 单测锁定。
+注意 harness 不进 benchmark 基线：graph 的 29.0% EM 是系统成绩，harness 是能力层，
+混跑会污染口径。行为契约由 mock provider 单测锁定。
 """
 
 from __future__ import annotations

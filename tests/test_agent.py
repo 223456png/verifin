@@ -1,6 +1,6 @@
 """Phase 3 — ReAct Agent Core（LangGraph 状态机）规格测试。
 
-设计要点（docs/designs/2026-08-29-phase-3-verifin-agent-core-design.md）：
+设计要点：
 - 领域 Tool 不依赖 LangGraph：测试经 ToolRegistry 注入 stub 工具，不耦合真实索引/LLM；
 - 动态路径是确定性证明：同一问题第二次运行携带 verify_flags passed 上下文 → 缩短路径；
 - hooks 记录节点访问轨迹，node 序列即执行路径。

@@ -73,8 +73,7 @@
 
 ### Added
 
-- `llm_provider.py`：`complete(prompt) -> str` 双通道 provider —— `BridgedLLM`（本地 z-ai 桥接）与 `OpenAICompatLLM`（OpenAI 兼容直连）。共同契约：永不抛异常、失败空串触发既有降级、逐调用统计落盘、3 次指数退避重试（3s/6s/12s）
-- `scripts/llm_bridge.mjs`：429 感知重试 + 最小间隔的本地桥接服务
+- `llm_provider.py`：`complete(prompt) -> str` 双通道 provider —— `BridgedLLM`（本地桥接）与 `OpenAICompatLLM`（OpenAI 兼容直连）。共同契约：永不抛异常、失败空串触发既有降级、逐调用统计落盘、3 次指数退避重试（3s/6s/12s）
 - `scripts/summarize_llm_ablation.py`：LLM on/off 自动对比归档
 - `run_benchmark.py`：`--llm-api-key` / `--llm-bridge` / `--llm-mode` 单变量消融开关
 
