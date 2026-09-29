@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VeriFin · 金融证据校验智能体</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,500;9..144,600&family=IBM+Plex+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ink: #0d110f;
+  --panel: #141916;
+  --panel-2: #1a201c;
+  --hairline: #2b332d;
+  --hairline-soft: #222924;
+  --paper: #e9e4d5;
+  --paper-dim: #b7b2a3;
+  --muted: #7d857c;
+  --gold: #c9a227;
+  --gold-soft: rgba(201, 162, 39, 0.14);
+  --emerald: #57b27a;
+  --emerald-soft: rgba(87, 178, 122, 0.12);
+  --crimson: #c0554d;
+  --crimson-soft: rgba(192, 85, 77, 0.12);
+  --serif: "Fraunces", "Noto Serif SC", "Songti SC", serif;
+  --mono: "IBM Plex Mono", "PingFang SC", monospace;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--mono);
+  font-size: 14px;
+  line-height: 1.65;
+  min-height: 100vh;
+  background-image:
+    repeating-linear-gradient(0deg, transparent 0 31px, var(--hairline-soft) 31px 32px),
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(201,162,39,0.05), transparent);
+  letter-spacing: 0.01em;
+}
+::selection { background: var(--gold); color: var(--ink); }
+
+/* ============ 顶栏 ============ */
+header {
+  display: flex; align-items: baseline; gap: 20px;
+  padding: 26px 40px 18px;
+  border-bottom: 1px solid var(--hairline);
+  position: sticky; top: 0; backdrop-filter: blur(8px);
+  background: rgba(13, 17, 15, 0.88); z-index: 10;
+}
+.wordmark {
+  font-family: var(--serif); font-weight: 600; font-size: 26px;
+  letter-spacing: -0.01em; display: flex; align-items: baseline; gap: 10px;
+}
+.wordmark .fin { color: var(--gold); font-style: italic; font-weight: 300; }
+.tagline { color: var(--muted); font-size: 12px; }
+.status {
+  margin-left: auto; display: flex; align-items: center; gap: 10px;
+  font-size: 11px; color: var(--paper-dim);
+}
+.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+.dot.ok { background: var(--emerald); box-shadow: 0 0 8px var(--emerald); animation: pulse 2.4s infinite; }
+.dot.err { background: var(--crimson); }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+/* ============ 布局 ============ */
+main {
+  display: grid; grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 0; max-width: 1240px; margin: 0 auto;
+  min-height: calc(100vh - 200px);
+}
+@media (max-width: 900px) { main { grid-template-columns: 1fr; } aside { display: none; } }
+
+/* ============ 对话区 ============ */
+.thread { padding: 34px 40px 180px; display: flex; flex-direction: column; gap: 30px; }
+.hero { margin-bottom: 6px; }
+.hero h1 {
+  font-family: var(--serif); font-weight: 300; font-size: clamp(28px, 4vw, 42px);
+  line-height: 1.25; letter-spacing: -0.015em; max-width: 560px;
+}
+.hero h1 em { color: var(--gold); font-style: italic; }
+.hero p { color: var(--muted); margin-top: 12px; max-width: 520px; font-size: 13px; }
+
+.turn { display: flex; flex-direction: column; gap: 14px; animation: rise 0.5s ease both; }
+@keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+.q { align-self: flex-end; max-width: 78%; text-align: right; }
+.q .bubble {
+  display: inline-block; background: var(--panel-2); border: 1px solid var(--hairline);
+  padding: 10px 16px; border-radius: 10px 10px 2px 10px; font-size: 14px;
+}
+.q .who { font-size: 10px; color: var(--muted); margin-bottom: 5px; letter-spacing: 0.12em; text-transform: uppercase; }
+
+.a { max-width: 92%; }
+.a .who { font-size: 10px; color: var(--gold); margin-bottom: 5px; letter-spacing: 0.12em; text-transform: uppercase; }
+.answer {
+  font-family: var(--serif); font-size: 17px; font-weight: 300; line-height: 1.6;
+  border-left: 2px solid var(--gold); padding-left: 16px;
+}
+
+/* 轨迹步进器 */
+.traj { display: flex; flex-wrap: wrap; gap: 0; align-items: center; margin-top: 2px; }
+.traj .step {
+  display: flex; align-items: center; gap: 0;
+  opacity: 0; animation: stepIn 0.35s ease both;
+}
+@keyframes stepIn { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: none; } }
+.traj .node {
+  font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase;
+  border: 1px solid var(--hairline); border-radius: 20px; padding: 3px 11px;
+  color: var(--paper-dim); background: var(--panel);
+}
+.traj .node.calc { border-color: var(--gold); color: var(--gold); background: var(--gold-soft); }
+.traj .node.verifier { border-color: var(--emerald); color: var(--emerald); }
+.traj .node.replanner { border-color: var(--crimson); color: var(--crimson); }
+.traj .arrow { color: var(--hairline); padding: 0 7px; font-size: 11px; }
+
+/* 证据卡 */
+.evidence { display: grid; gap: 8px; margin-top: 4px; }
+.ev {
+  display: grid; grid-template-columns: auto 1fr auto; gap: 14px; align-items: baseline;
+  background: var(--panel); border: 1px solid var(--hairline-soft);
+  padding: 12px 16px; border-radius: 6px;
+  transition: border-color 0.25s, transform 0.25s;
+}
+.ev:hover { border-color: var(--hairline); transform: translateX(3px); }
+.ev .idx { font-size: 10px; color: var(--gold); letter-spacing: 0.1em; }
+.ev .content { font-size: 12.5px; color: var(--paper-dim); line-height: 1.55; }
+.ev .content b { color: var(--paper); font-weight: 500; }
+.ev .val { font-size: 13px; color: var(--emerald); white-space: nowrap; text-align: right; }
+.ev .badge {
+  display: inline-block; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--emerald); background: var(--emerald-soft);
+  border: 1px solid rgba(87,178,122,0.3); border-radius: 3px; padding: 1px 7px; margin-bottom: 6px;
+}
+.ev .meta { font-size: 10.5px; color: var(--muted); margin-top: 4px; }
+
+/* 计算面板 */
+.calc {
+  margin-top: 4px; background: var(--gold-soft); border: 1px solid rgba(201,162,39,0.3);
+  border-radius: 6px; padding: 14px 18px;
+}
+.calc .label { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--gold); margin-bottom: 8px; }
+.calc .expr { font-size: 15px; color: var(--paper); margin-bottom: 10px; word-break: break-all; }
+.calc .scales { display: flex; flex-wrap: wrap; gap: 22px; }
+.calc .scale .k { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; }
+.calc .scale .v { font-size: 16px; color: var(--gold); font-weight: 500; }
+
+/* 偏好记忆 chips */
+.prefs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.pref {
+  font-size: 10.5px; color: var(--paper-dim); border: 1px dashed var(--hairline);
+  border-radius: 14px; padding: 2px 10px;
+}
+.pref b { color: var(--gold); font-weight: 400; }
+
+/* ============ 侧栏 ============ */
+aside {
+  border-left: 1px solid var(--hairline); padding: 34px 28px 60px;
+  display: flex; flex-direction: column; gap: 28px;
+}
+aside h3 {
+  font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--muted); font-weight: 400; padding-bottom: 10px;
+  border-bottom: 1px solid var(--hairline-soft);
+}
+.example { display: flex; flex-direction: column; gap: 8px; }
+.ex-btn {
+  text-align: left; background: none; border: 1px solid var(--hairline-soft);
+  color: var(--paper-dim); font-family: var(--mono); font-size: 12px;
+  padding: 10px 14px; border-radius: 6px; cursor: pointer; line-height: 1.5;
+  transition: all 0.2s;
+}
+.ex-btn:hover { border-color: var(--gold); color: var(--paper); background: var(--gold-soft); transform: translateX(2px); }
+.ex-btn .tag { display: block; font-size: 9.5px; color: var(--gold); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 3px; }
+.session .row { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--paper-dim); padding: 4px 0; }
+.session .row b { color: var(--paper); font-weight: 400; }
+.new-conv {
+  margin-top: 10px; width: 100%; background: none; border: 1px solid var(--hairline);
+  color: var(--paper-dim); font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em;
+  padding: 8px; border-radius: 5px; cursor: pointer; text-transform: uppercase;
+  transition: all 0.2s;
+}
+.new-conv:hover { border-color: var(--crimson); color: var(--crimson); }
+
+/* ============ 输入区 ============ */
+.dock {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  background: linear-gradient(transparent, var(--ink) 30%);
+  padding: 30px 0 26px; z-index: 5;
+}
+.dock-inner { max-width: 1240px; margin: 0 auto; padding: 0 40px; position: relative; }
+#input {
+  width: 100%; background: var(--panel-2); border: 1px solid var(--hairline);
+  border-radius: 10px; color: var(--paper); font-family: var(--mono); font-size: 14.5px;
+  padding: 15px 118px 15px 18px; outline: none; resize: none;
+  transition: border-color 0.25s, box-shadow 0.25s;
+}
+#input:focus { border-color: var(--gold); box-shadow: 0 0 0 3px rgba(201,162,39,0.08); }
+#send {
+  position: absolute; right: 47px; top: 50%; transform: translateY(-50%);
+  background: var(--gold); color: var(--ink); border: none; border-radius: 7px;
+  font-family: var(--mono); font-size: 12px; font-weight: 500; letter-spacing: 0.08em;
+  padding: 9px 18px; cursor: pointer; text-transform: uppercase; transition: all 0.2s;
+}
+#send:hover { transform: translateY(-50%) translateY(-1px); box-shadow: 0 4px 16px rgba(201,162,39,0.35); }
+#send:disabled { opacity: 0.45; cursor: default; box-shadow: none; }
+.hint { font-size: 10.5px; color: var(--muted); margin-top: 8px; text-align: right; }
+
+/* loading */
+.thinking { display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 12px; }
+.thinking .bar { display: inline-flex; gap: 4px; }
+.thinking .bar i {
+  width: 4px; height: 14px; background: var(--gold); opacity: 0.25;
+  animation: eq 1s infinite; border-radius: 1px;
+}
+.thinking .bar i:nth-child(2) { animation-delay: 0.15s; }
+.thinking .bar i:nth-child(3) { animation-delay: 0.3s; }
+.thinking .bar i:nth-child(4) { animation-delay: 0.45s; }
+@keyframes eq { 0%,100% { transform: scaleY(0.4); opacity: 0.3; } 50% { transform: scaleY(1); opacity: 1; } }
+
+.error {
+  background: var(--crimson-soft); border: 1px solid rgba(192,85,77,0.35);
+  color: var(--crimson); border-radius: 6px; padding: 10px 14px; font-size: 12.5px;
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wordmark">Veri<span class="fin">Fin</span></div>
+  <div class="tagline">金融证据校验智能体 · LangGraph ReAct</div>
+  <div class="status">
+    <span class="dot" id="dot"></span>
+    <span id="status-text">连接中…</span>
+  </div>
+</header>
+
+<main>
+  <section class="thread" id="thread">
+    <div class="hero">
+      <h1>每个数字，都要<br><em>过证据这一关</em>。</h1>
+      <p>提问一个金融指标——智能体检索文档、四要素校验证据、冲突时重规划，推导型问题由程序执行器安全求值，全程轨迹可查。</p>
+    </div>
+  </section>
+
+  <aside>
+    <div class="example">
+      <h3>试试这些</h3>
+      <button class="ex-btn" data-q="What was NovaTech revenue in 2023?">
+        <span class="tag">提取型</span>NovaTech 2023 年营收是多少？
+      </button>
+      <button class="ex-btn" data-q="What was the percentage growth in NovaTech revenue from 2023 to 2024?">
+        <span class="tag">推导型 · PoT 计算</span>NovaTech 营收 2023→2024 增长率？
+      </button>
+      <button class="ex-btn" data-q="What was NovaTech revenue in 2024? 只看年报口径">
+        <span class="tag">冲突仲裁</span>2024 营收（新闻稿 vs 年报口径冲突）
+      </button>
+      <button class="ex-btn" data-q="What about its gross margin?">
+        <span class="tag">多轮指代</span>那毛利率呢？（需先问上面任一题）
+      </button>
+    </div>
+    <div class="session">
+      <h3>会话</h3>
+      <div class="row"><span>conversation</span><b id="conv-id">—</b></div>
+      <div class="row"><span>语料</span><b id="corpus">—</b></div>
+      <div class="row"><span>会话数</span><b id="sessions">—</b></div>
+      <button class="new-conv" id="new-conv">＋ 新会话（清空偏好）</button>
+    </div>
+  </aside>
+</main>
+
+<div class="dock">
+  <div class="dock-inner">
+    <textarea id="input" rows="1" placeholder="输入金融问题，例如：NovaTech 2024 年净利润是多少？"></textarea>
+    <button id="send">提问 →</button>
+    <div class="hint">Enter 发送 · Shift+Enter 换行 · 同一会话内智能体记住你的偏好</div>
+  </div>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const thread = $("#thread");
+const input = $("#input");
+const send = $("#send");
+let conversationId = crypto.randomUUID ? crypto.randomUUID() : String(Date.now());
+
+function el(tag, cls, html) {
+  const node = document.createElement(tag);
+  if (cls) node.className = cls;
+  if (html !== undefined) node.innerHTML = html;
+  return node;
+}
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
+const fmt = (v, u) => v == null ? "" : `${Number(v).toLocaleString()}${u ? " " + u : ""}`;
+
+/* ---- 健康检查 ---- */
+async function checkHealth() {
+  try {
+    const r = await fetch("/health");
+    const b = await r.json();
+    $("#dot").className = "dot ok";
+    $("#status-text").textContent = "服务在线";
+    $("#corpus").textContent = b.corpus?.source === "synthetic" ? "内置合成语料" : "预构建索引";
+    $("#sessions").textContent = b.sessions ?? "—";
+  } catch {
+    $("#dot").className = "dot err";
+    $("#status-text").textContent = "服务离线";
+  }
+}
+checkHealth(); setInterval(checkHealth, 15000);
+$("#conv-id").textContent = conversationId.slice(0, 8);
+
+/* ---- 渲染 ---- */
+function renderTurn(query, data) {
+  const turn = el("div", "turn");
+
+  // 用户问题
+  const q = el("div", "q");
+  q.append(el("div", "who", "You"));
+  q.append(el("div", "bubble", esc(query)));
+  turn.append(q);
+
+  // 智能体回答
+  const a = el("div", "a");
+  a.append(el("div", "who", "VeriFin Agent"));
+  a.append(el("div", "answer", esc(data.answer || "（无回答）")));
+  turn.append(a);
+
+  // 计算面板
+  const calc = data.calculation || {};
+  if (calc.expression || calc.error) {
+    const panel = el("div", "calc");
+    panel.append(el("div", "label", "PoT 程序执行 · " + (calc.kind || "calc")));
+    if (calc.expression) {
+      panel.append(el("div", "expr", `<code>${esc(calc.expression)}</code>`));
+      const scales = el("div", "scales");
+      const items = [
+        ["增长率", calc.value, calc.unit || "%"],
+        ["比率", calc.fraction, ""],
+        ["差值", calc.difference, calc.difference_unit || ""],
+      ];
+      items.forEach(([k, v, u]) => {
+        if (v == null) return;
+        const s = el("div", "scale");
+        s.append(el("div", "k", k));
+        s.append(el("div", "v", fmt(v, u)));
+        scales.append(s);
+      });
+      panel.append(scales);
+    } else if (calc.error) {
+      panel.append(el("div", "expr", `<span style="color:var(--crimson)">${esc(calc.error)}</span>`));
+    }
+    turn.append(panel);
+  }
+
+  // 轨迹步进器
+  const path = data.trajectory?.node_path || [];
+  if (path.length) {
+    const traj = el("div", "traj");
+    path.forEach((node, i) => {
+      const step = el("div", "step");
+      step.style.animationDelay = `${i * 0.12}s`;
+      step.append(el("span", `node ${node}`, esc(node)));
+      traj.append(step);
+      if (i < path.length - 1) {
+        const arrow = el("span", "arrow", "→");
+        arrow.style.animationDelay = `${i * 0.12 + 0.06}s`;
+        arrow.className = "arrow step";
+        traj.append(arrow);
+      }
+    });
+    turn.append(traj);
+  }
+
+  // 证据卡
+  const evidence = data.evidence || [];
+  if (evidence.length) {
+    const box = el("div", "evidence");
+    evidence.forEach((ev, i) => {
+      const card = el("div", "ev");
+      card.style.animation = `rise 0.4s ease ${0.3 + i * 0.08}s both`;
+      const left = el("div");
+      left.append(el("div", "badge", "✓ 已验证"));
+      left.append(el("div", "idx", `E${i + 1}`));
+      const mid = el("div");
+      mid.append(el("div", "content", esc(ev.content || "")));
+      mid.append(el("div", "meta", `${esc(ev.doc_name || ev.doc_id || ev.chunk_id || "")}${ev.period ? " · " + esc(ev.period) : ""}`));
+      const right = el("div", "val", fmt(ev.value, ev.unit));
+      card.append(left, mid, right);
+      box.append(card);
+    });
+    turn.append(box);
+  }
+
+  // 偏好记忆
+  const prefs = data.dialog_state || {};
+  const prefKeys = Object.keys(prefs).filter(k => k.endsWith("_preference") && prefs[k]);
+  if (prefKeys.length) {
+    const chips = el("div", "prefs");
+    prefKeys.forEach(k => {
+      chips.append(el("span", "pref", `${esc(k.replace("_preference", ""))}: <b>${esc(prefs[k])}</b>`));
+    });
+    turn.append(chips);
+  }
+
+  thread.append(turn);
+  turn.scrollIntoView({ behavior: "smooth", block: "end" });
+}
+
+function renderThinking(query) {
+  const turn = el("div", "turn");
+  const q = el("div", "q");
+  q.append(el("div", "who", "You"));
+  q.append(el("div", "bubble", esc(query)));
+  turn.append(q);
+  const t = el("div", "thinking");
+  t.innerHTML = `<span class="bar"><i></i><i></i><i></i><i></i></span> 智能体正在检索 · 校验 · 推理…`;
+  turn.append(t);
+  thread.append(turn);
+  turn.scrollIntoView({ behavior: "smooth", block: "end" });
+  return turn;
+}
+
+/* ---- 交互 ---- */
+async function ask(query) {
+  const pending = renderThinking(query);
+  send.disabled = true;
+  try {
+    const r = await fetch("/ask", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query, conversation_id: conversationId }),
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
+    pending.remove();
+    renderTurn(query, data);
+  } catch (e) {
+    pending.remove();
+    const turn = el("div", "turn");
+    turn.append(el("div", "error", `请求失败：${esc(e.message)} — 请确认 FastAPI 服务已启动（uvicorn 或 python -m verifin.api.app）`));
+    thread.append(turn);
+  } finally {
+    send.disabled = false;
+    input.focus();
+  }
+}
+
+send.addEventListener("click", () => {
+  const q = input.value.trim();
+  if (q) { input.value = ""; input.style.height = "auto"; ask(q); }
+});
+input.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    send.click();
+  }
+});
+input.addEventListener("input", () => {
+  input.style.height = "auto";
+  input.style.height = Math.min(input.scrollHeight, 140) + "px";
+});
+document.querySelectorAll(".ex-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    input.value = btn.dataset.q;
+    send.click();
+  });
+});
+$("#new-conv").addEventListener("click", () => {
+  conversationId = crypto.randomUUID ? crypto.randomUUID() : String(Date.now());
+  $("#conv-id").textContent = conversationId.slice(0, 8);
+  document.querySelectorAll(".turn").forEach(t => t.remove());
+  input.focus();
+});
+</script>
+</body>
+</html>
