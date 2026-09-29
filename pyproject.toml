@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "verifin"
-version = "0.12.5"
+version = "0.13.1"
 description = "VeriFin — LangGraph-based financial evidence verification agent with an MCP server, four-factor claim checks and a sandboxed PoT calculator"
 readme = "README.md"
 requires-python = ">=3.10"

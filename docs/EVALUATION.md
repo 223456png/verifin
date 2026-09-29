@@ -133,7 +133,7 @@ LangGraph 多智能体金融证据校验 RAG 系统：BM25 + Dense 混合检索�
 ### Phase 13 / 13.1：Tool-Calling Harness 与 Structured Outputs（能力层，不进评测口径）
 
 1. **架构定位（诚实分层）**：`ToolCallingHarness` 是与固定状态机互补的**开放任务能力层**——LLM 按 OpenAI function calling 协议自主决定调什么工具、何时停（三停机条件：finished / max_turns / llm_error）。**它与 graph 的确定性路由不在同一评测口径**：EM 基线全部来自 graph 流水线（LLM planner 自由分解 24% < 规则混合 29% 的消融数据支撑确定性路由的选择），harness 不参与 EM 数字，因此本文件的指标表不含 Phase 13 行——这是口径隔离，不是漏测（harness 行为由 17 项单测锁定：调度、回喂、三停机）。
-2. **Phase 13.1 Structured Outputs**：`response_format` 透传（OpenAI `json_schema` strict 形态，planner / programmer 各自 schema：`financial_plan` / `dsl_program`），端点不支持时自动摘除回退（400/422 即摘、不吃退避预算），`--json-schema` 消融开关。8 项测试锁定透传 / 回退 / 接线语义；**真实评测数字待跑**（需 LLM key，见第五节回溯索引说明）。
+2. **Phase 13.1 Structured Outputs**：`response_format` 透传（OpenAI `json_schema` strict 形态，planner / programmer 各自 schema：`financial_plan` / `dsl_program`），端点不支持时自动摘除回退（400/422 即摘、不吃退避预算），`--json-schema` 消融开关。8 项测试锁定透传 / 回退 / 接线语义。**消融实测（2026-09-29，v13_js vs v125，FinQA test 100 样本、programmer 模式、DeepSeek 直连）**：EM 31.0% vs 30.0%（+1pp = 多对 1 题，噪声量级）；LLM 调用 44/44 成功、attempt=1 零重试（基线 45/45 同为 100%——宽容解析在 DeepSeek 上本已零失败，json-schema 的收益是**确定性 schema 保证**而非实测解析救回）；代价 = 平均延迟 524.7ms → 713.2ms（+36%，约束式生成的额外计算）。定位：用 ~1/3 延迟换取结构化输出的架构级确定性。
 
 ---
 
@@ -168,6 +168,8 @@ LangGraph 多智能体金融证据校验 RAG 系统：BM25 + Dense 混合检索�
 | LLM planner 消融 24.0%（Phase 12.3） | `results_llm_both/report.md` + planner/programmer 调用日志 | **已入库** |
 | FinQA EM 30.0%（Phase 12.5，实体门控） | `results_v125/report.md` | **报告已入库** |
 | Phase 12.5b 负向结果 29.0% | `results_v126/report.md` + `llm_calls_entity_link.json` | **已入库** |
+| Structured Outputs 消融 31.0%（Phase 13.1） | `results_v13_js/report.md` + `llm_calls_programmer.json` | **已入库** |
+| 无 LLM 降级基线 22.0%（key 失效轮的副产物） | CHANGELOG「Phase 13.1」条目 | 佐证降级架构：LLM 全挂时 EM 回到规则基线水平 |
 | 3/3 回归样本修复（Phase 12.2） | `results/repro_regressions/` | **已入库** |
 | ConvFinQA recall 65% | CHANGELOG「ConvFinQA」条目 | 沙箱产物未保留 |
 | 检索升级 recall 81%→86% | `scripts/compare_retrieval.py`（FinQA test 100 样本实测） | 脚本入库 |
