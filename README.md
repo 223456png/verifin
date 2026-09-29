@@ -286,6 +286,10 @@ docker compose up --build
 # 服务暴露在 http://127.0.0.1:8000
 ```
 
+### 方式二 b：Hugging Face Space 自托管
+
+`deploy/hf-space/` 提供等价的 Docker Space 部署资产（合成语料零依赖模式，锁定仓库提交构建）——可直接创建 Docker Space 后推送该目录，或参考其 Dockerfile 自行部署到任意容器平台。前端更新用 `make space-sync` 同步。
+
 ### 方式三：真实 FinQA 评测
 
 ```bash
@@ -386,7 +390,7 @@ src/verifin/
 - [x] 多跳 QA 合成管线（种子抽取 + 四重校验，16 条基准 + 能力边界实证）
 - [x] 实体键控程序模板（cross_entity_diff / argmax_relay），多跳基准 EM 37.5% → 100%
 - [x] **Phase 13**：最小 tool-calling harness——`ToolCallingHarness` 循环 + `OpenAICompatLLM.chat`（messages+tools function calling 协议），17 项测试锁定循环语义（工具回喂 / 三停机 / 单例隔离），不动 graph 与 benchmark 一行
-- [x] **Phase 13.1**：LLM 调用接 Structured Outputs——`response_format` 透传（OpenAI `json_schema` strict 形态，planner/programmer 各自 schema：`financial_plan` / `dsl_program`），端点不支持时自动摘除回退（400/422 即摘、不吃退避预算），`--json-schema` 消融开关；模型层保证输出结构 + 手工解析降级双层防线并存，8 项测试锁定透传/回退/接线语义
+- [x] **Phase 13.1**：LLM 调用接 Structured Outputs——`response_format` 透传（OpenAI `json_schema` strict 形态，planner/programmer 各自 schema：`financial_plan` / `dsl_program`），端点不支持时自动摘除回退（400/422 即摘、不吃退避预算），`--json-schema` 消融开关；模型层保证输出结构 + 手工解析降级双层防线并存，8 项测试锁定透传/回退/接线语义。**消融实测**（FinQA test 100 样本，vs v125）：EM 31.0% vs 30.0%（噪声量级，零重试本来就稳），代价 +36% 延迟——json-schema 买到的是结构确定性而非准确率，详见 `docs/EVALUATION.md`
 - [ ] 金融域专用 rerank（通用 ms-marco 对数值表格无益，需财务语料微调）
 - [ ] TAT-QA 数据集评测（跨表推理）
 - [ ] 重规划策略优化（多跳基准首答全对暂无触发；真实 FinQA 上有效率 50% → 目标 60%+）
