@@ -5,7 +5,7 @@ PORT ?= 8000
 INDEX_DIR ?= ./bge_env
 
 .PHONY: help install lint test cover demo demo-finqa mcp index benchmark benchmark-finqa \
-        ablation multi-turn multihop multihop-synth mcp-smoke up down clean
+        ablation multi-turn multihop multihop-synth mcp-smoke space-sync up down clean
 
 help: ## 显示所有可用命令
         @grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -37,6 +37,9 @@ mcp: ## 启动 MCP Server（stdio，供 Claude Desktop / Cursor 等客户端连�
 
 mcp-smoke: ## MCP Server 协议级冒烟测试（需已构建索引）
         VERIFIN_INDEX_DIR=$(INDEX_DIR) HF_HUB_OFFLINE=1 $(PY) scripts/test_mcp_server.py
+
+space-sync: ## 同步 web/index.html 到 HF Space 部署目录（改前端后执行再推送 Space）
+        cp web/index.html deploy/hf-space/web/index.html
 
 index: ## 构建 FinQA 索引（data/finqa → indexes/）
         $(PY) scripts/build_index.py --dataset finqa --data-dir ./data/finqa
