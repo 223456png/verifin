@@ -25,7 +25,11 @@ from verifin.tools.failure_memory import FailureMemoryStore
 from verifin.tools.registry import ToolRegistry
 from verifin.tools.replanner import Replanner
 from verifin.tools.verifier import extract_claim, verify_claim_batch
-from verifin.ui.messages import friendly_message, preference_confirmation
+from verifin.ui.messages import (
+    friendly_message,
+    preference_confirmation,
+    success_message_lines,
+)
 
 
 def _as_dict(state: Any) -> dict:
@@ -1329,6 +1333,7 @@ def _failure_message_lines(s: dict) -> List[str]:
     flags: Dict[str, Any] = s.get("verify_flags") or {}
     lines: List[str] = []
     emitted: set = set()
+    emitted_lines: set = set()
     conflict_major = False
     for flag in flags.values():
         if not isinstance(flag, dict):
@@ -1348,11 +1353,15 @@ def _failure_message_lines(s: dict) -> List[str]:
                 if key in emitted:
                     continue
                 emitted.add(key)
-                lines.append(
-                    friendly_message(
-                        f"MISMATCH_{pillar.upper()}", expected=expected, got=got
-                    )
+                line = friendly_message(
+                    f"MISMATCH_{pillar.upper()}", expected=expected, got=got
                 )
+                # 渲染文本级去重：同一模板不同 expected/got 组合可能渲染出
+                # 完全相同的行（如 MISMATCH_ENTITY 不展示 got），重复行无信息量
+                if line in emitted_lines:
+                    continue
+                emitted_lines.add(line)
+                lines.append(line)
                 if len(lines) >= 3:
                     break
             if len(lines) >= 3:
@@ -1373,13 +1382,10 @@ def _calculation_line(s: dict) -> Optional[str]:
     calc = s.get("calculation_result") or {}
     if not isinstance(calc, dict) or calc.get("value") is None:
         return None
-    base = calc.get("base") or {}
-    target = calc.get("target") or {}
-    return (
-        f"Calculated result ({calc.get('kind')}): {calc['value']}% "
-        f"[expression: {calc.get('expression')}] "
-        f"[base {base.get('value')} → target {target.get('value')}]"
-    )
+    from verifin.ui.messages import calculation_message
+
+    line = calculation_message(calc)
+    return line
 
 
 def synthesizer_node(state: Any) -> dict:
@@ -1399,12 +1405,6 @@ def synthesizer_node(state: Any) -> dict:
         for result in (flag.get("results") or [])
         if isinstance(result, dict) and result.get("passed")
     }
-    verdicts = [
-        flag.get("decision")
-        for flag in flags.values()
-        if isinstance(flag, dict) and flag.get("decision")
-    ]
-    verdict = verdicts[-1] if verdicts else "REJECT"
     calc_line = _calculation_line(s)
 
     if accepted_ids:
@@ -1417,13 +1417,31 @@ def synthesizer_node(state: Any) -> dict:
         verified_docs = []
 
     if verified_docs:
-        lines = ["Based on verified evidence:", f"- verification verdict: {verdict}"]
+        # 首条通过校验证据的数值（提取型主句用）
+        first_value = None
+        first_unit = ""
+        for flag in flags.values():
+            if not isinstance(flag, dict):
+                continue
+            for result in flag.get("results") or []:
+                if isinstance(result, dict) and result.get("passed"):
+                    first_value = result.get("value")
+                    first_unit = result.get("unit") or ""
+                    break
+            if first_value is not None:
+                break
+
+        # 本轮问题的 claim（主句主体描述用）
+        query_claim = extract_claim(_latest_user_query(s))
+
+        lines = success_message_lines(
+            verified_docs, s.get("calculation_result"), query_claim,
+            first_value=first_value, first_unit=first_unit,
+        )
         # Phase 6：偏好确认前置（如「已按您偏好的「年报」口径呈现结果。」）
         confirmation = preference_confirmation(s.get("dialog_state") or {})
         if confirmation:
             lines.insert(0, confirmation)
-        if calc_line:
-            lines.insert(0, calc_line)
         for doc in verified_docs:
             source = (
                 (doc.get("metadata") or {}).get("doc_id")

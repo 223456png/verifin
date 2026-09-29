@@ -4,9 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>VeriFin · 金融证据校验智能体</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,500;9..144,600&family=IBM+Plex+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%8D%3C/text%3E%3C/svg%3E">
 <style>
 :root {
   --ink: #0d110f;
@@ -23,8 +21,8 @@
   --emerald-soft: rgba(87, 178, 122, 0.12);
   --crimson: #c0554d;
   --crimson-soft: rgba(192, 85, 77, 0.12);
-  --serif: "Fraunces", "Noto Serif SC", "Songti SC", serif;
-  --mono: "IBM Plex Mono", "PingFang SC", monospace;
+  --serif: Georgia, "Noto Serif SC", "Source Han Serif SC", "Songti SC", "SimSun", serif;
+  --mono: Consolas, "Noto Sans Mono", Menlo, monospace;
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html { scroll-behavior: smooth; }
@@ -135,6 +133,8 @@ main {
   color: var(--emerald); background: var(--emerald-soft);
   border: 1px solid rgba(87,178,122,0.3); border-radius: 3px; padding: 1px 7px; margin-bottom: 6px;
 }
+.ev .badge.excluded { color: var(--muted); background: transparent; border-color: var(--hairline); }
+.ev.excluded .val { color: var(--muted); }
 .ev .meta { font-size: 10.5px; color: var(--muted); margin-top: 4px; }
 
 /* 计算面板 */
@@ -143,6 +143,11 @@ main {
   border-radius: 6px; padding: 14px 18px;
 }
 .calc .label { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--gold); margin-bottom: 8px; }
+.calc .alts { margin-top: 10px; padding-top: 8px; border-top: 1px dashed rgba(201,162,39,0.3); }
+.calc .alt-label { font-size: 9.5px; letter-spacing: 0.12em; color: var(--muted); margin-bottom: 5px; }
+.calc .alt-row { display: flex; justify-content: space-between; gap: 12px; font-size: 11.5px; padding: 2px 0; }
+.calc .alt-val { color: var(--paper-dim); font-family: var(--mono); }
+.calc .alt-src { color: var(--muted); font-size: 10.5px; }
 .calc .expr { font-size: 15px; color: var(--paper); margin-bottom: 10px; word-break: break-all; }
 .calc .scales { display: flex; flex-wrap: wrap; gap: 22px; }
 .calc .scale .k { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; }
@@ -239,7 +244,7 @@ aside h3 {
 </header>
 
 <main>
-  <section class="thread" id="thread">
+  <section class="thread" id="thread" aria-live="polite" aria-label="对话区">
     <div class="hero">
       <h1>每个数字，都要<br><em>过证据这一关</em>。</h1>
       <p>提问一个金融指标——智能体检索文档、四要素校验证据、冲突时重规划，推导型问题由程序执行器安全求值，全程轨迹可查。</p>
@@ -249,13 +254,13 @@ aside h3 {
   <aside>
     <div class="example">
       <h3>试试这些</h3>
-      <button class="ex-btn" data-q="What was NovaTech revenue in 2023?">
+      <button class="ex-btn" data-q="NovaTech 2023 年营收是多少？">
         <span class="tag">提取型</span>NovaTech 2023 年营收是多少？
       </button>
-      <button class="ex-btn" data-q="What was the percentage growth in NovaTech revenue from 2023 to 2024?">
+      <button class="ex-btn" data-q="NovaTech 营收 2023 到 2024 增长率是多少？">
         <span class="tag">推导型 · PoT 计算</span>NovaTech 营收 2023→2024 增长率？
       </button>
-      <button class="ex-btn" data-q="What was NovaTech revenue in 2024? 只看年报口径">
+      <button class="ex-btn" data-q="NovaTech 2024 年营收是多少？只看年报口径">
         <span class="tag">冲突仲裁</span>2024 营收（新闻稿 vs 年报口径冲突）
       </button>
       <button class="ex-btn" data-q="What about its gross margin?">
@@ -267,6 +272,7 @@ aside h3 {
       <div class="row"><span>conversation</span><b id="conv-id">—</b></div>
       <div class="row"><span>语料</span><b id="corpus">—</b></div>
       <div class="row"><span>会话数</span><b id="sessions">—</b></div>
+      <div class="row"><span>最近裁决</span><b id="verdict">—</b></div>
       <button class="new-conv" id="new-conv">＋ 新会话（清空偏好）</button>
     </div>
   </aside>
@@ -337,10 +343,11 @@ function renderTurn(query, data) {
     if (calc.expression) {
       panel.append(el("div", "expr", `<code>${esc(calc.expression)}</code>`));
       const scales = el("div", "scales");
+      const isGrowth = (calc.kind || "").includes("growth");
       const items = [
-        ["增长率", calc.value, calc.unit || "%"],
-        ["比率", calc.fraction, ""],
-        ["差值", calc.difference, calc.difference_unit || ""],
+        [isGrowth ? "增长率" : "结果", calc.value, calc.unit || "%"],
+        [isGrowth ? "比率" : "分数", calc.fraction, ""],
+        [isGrowth ? "差值" : "变化量", calc.difference, calc.difference_unit || ""],
       ];
       items.forEach(([k, v, u]) => {
         if (v == null) return;
@@ -350,6 +357,20 @@ function renderTurn(query, data) {
         scales.append(s);
       });
       panel.append(scales);
+      // 口径候选（alternates）：主结果之外的其他证据口径，透明披露
+      const alts = calc.alternates || [];
+      if (alts.length > 1) {
+        const altBox = el("div", "alts");
+        altBox.append(el("div", "alt-label", "口径候选"));
+        alts.slice(1).forEach(a => {
+          const row = el("div", "alt-row");
+          const pct = a.fraction != null ? (a.fraction * 100).toFixed(1) + "%" : "";
+          row.append(el("span", "alt-val", `${fmt(a.target?.value)} ${esc(a.target?.period || "")}`));
+          row.append(el("span", "alt-src", `${pct}${a.target?.chunk_id ? " · " + esc(a.target.chunk_id) : ""}`));
+          altBox.append(row);
+        });
+        panel.append(altBox);
+      }
     } else if (calc.error) {
       panel.append(el("div", "expr", `<span style="color:var(--crimson)">${esc(calc.error)}</span>`));
     }
@@ -382,13 +403,15 @@ function renderTurn(query, data) {
     evidence.forEach((ev, i) => {
       const card = el("div", "ev");
       card.style.animation = `rise 0.4s ease ${0.3 + i * 0.08}s both`;
+      const accepted = ev.status !== "excluded";
       const left = el("div");
-      left.append(el("div", "badge", "✓ 已验证"));
+      left.append(el("div", accepted ? "badge" : "badge excluded", accepted ? "✓ 已采纳" : "✕ 未采纳"));
       left.append(el("div", "idx", `E${i + 1}`));
       const mid = el("div");
       mid.append(el("div", "content", esc(ev.content || "")));
       mid.append(el("div", "meta", `${esc(ev.doc_name || ev.doc_id || ev.chunk_id || "")}${ev.period ? " · " + esc(ev.period) : ""}`));
       const right = el("div", "val", fmt(ev.value, ev.unit));
+      if (!accepted) card.classList.add("excluded");
       card.append(left, mid, right);
       box.append(card);
     });
@@ -406,6 +429,8 @@ function renderTurn(query, data) {
     turn.append(chips);
   }
 
+  const v = $("#verdict");
+  if (v && data.verdict) v.textContent = data.verdict;
   thread.append(turn);
   turn.scrollIntoView({ behavior: "smooth", block: "end" });
 }
@@ -428,20 +453,28 @@ function renderThinking(query) {
 async function ask(query) {
   const pending = renderThinking(query);
   send.disabled = true;
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), 90000);
   try {
     const r = await fetch("/ask", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ query, conversation_id: conversationId }),
+      signal: abort.signal,
     });
+    clearTimeout(timer);
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const data = await r.json();
     pending.remove();
     renderTurn(query, data);
   } catch (e) {
+    clearTimeout(timer);
     pending.remove();
     const turn = el("div", "turn");
-    turn.append(el("div", "error", `请求失败：${esc(e.message)} — 请确认 FastAPI 服务已启动（uvicorn 或 python -m verifin.api.app）`));
+    const msg = e.name === "AbortError"
+      ? "请求超时（90 秒），请尝试更明确的问题表述后重试。"
+      : `请求失败：${esc(e.message)} — 请确认 FastAPI 服务已启动（uvicorn 或 python -m verifin.api.app）`;
+    turn.append(el("div", "error", msg));
     thread.append(turn);
   } finally {
     send.disabled = false;

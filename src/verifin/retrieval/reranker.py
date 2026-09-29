@@ -27,6 +27,8 @@ class Reranker:
     def __init__(self, model_name: Optional[str] = None) -> None:
         # None → 读环境变量 RERANKER_MODEL（支持本地目录离线加载），
         # 均未设置时用默认模型名。显式传参优先级最高（向后兼容）。
+        explicit = model_name is not None or bool(os.environ.get("RERANKER_MODEL"))
+        self._explicit = explicit
         self.model_name = (
             model_name
             if model_name is not None
@@ -49,10 +51,21 @@ class Reranker:
         """懒加载模型；任何失败（依赖缺失/模型不可达）都降级，不抛出。
 
         每进程只尝试一次（成败皆缓存），防网络故障下的重复长阻塞。
+        无显式配置（未传参且未设 ``RERANKER_MODEL``）时，默认模型若不在
+        本地 HF 缓存则直接降级——避免首次调用触发联网下载（弱网/无网环境
+        可阻塞数十秒到数分钟，Web Demo 场景不可接受）。显式配置的路径
+        永远尝试加载（评测/离线权重目录不受影响）。
         """
         if self._load_attempted:
             return
         self._load_attempted = True
+        if not self._explicit and not self._has_local_weights():
+            logger.info(
+                "Reranker 默认模型不在本地缓存且未显式配置，跳过精排"
+                "（如需启用：设 RERANKER_MODEL 指向本地模型目录）"
+            )
+            self._available = False
+            return
         try:
             from sentence_transformers import CrossEncoder
 
@@ -65,6 +78,22 @@ class Reranker:
                 self.model_name, exc,
             )
             self._available = False
+
+    def _has_local_weights(self) -> bool:
+        """默认模型是否已存在于本地（本地目录路径 / HF 缓存）。"""
+        import os
+        from pathlib import Path
+
+        if os.path.isdir(self.model_name):
+            return True
+        try:
+            from huggingface_hub import try_to_load_from_cache
+
+            path = try_to_load_from_cache(self.model_name, "config.json")
+            return isinstance(path, str) and Path(path).exists()
+        except Exception:
+            # huggingface_hub 不可用或缓存探测异常 → 视为无本地权重
+            return False
 
     def rerank(
         self,

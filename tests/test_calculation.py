@@ -154,7 +154,7 @@ def test_graph_routes_to_calculator() -> None:
     assert "calculator" in path, f"计算问题应路由到 calculator: {path}"
     assert final["calculation_result"]["value"] == pytest.approx(20.0)
     answers = [m for m in final["messages"] if m.get("role") == "assistant"]
-    assert "Calculated result" in answers[-1]["content"]
+    assert "计算完成" in answers[-1]["content"]
 
 
 # 5. 图路由：无计算需求时跳过 calculator（Phase 3 路径不变）
