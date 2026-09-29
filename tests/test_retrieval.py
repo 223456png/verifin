@@ -148,7 +148,8 @@ def test_reranker_load_failure_cached(monkeypatch) -> None:
     fake_st.CrossEncoder = _Boom
     monkeypatch.setitem(sys.modules, "sentence_transformers", fake_st)
 
-    reranker = Reranker()
+    # 显式传参：跳过"无本地缓存即降级"的入口探测，直接测懒加载 + 失败缓存语义
+    reranker = Reranker(model_name="fake-reranker")
     outs = [reranker.rerank("q", [("a", "x"), ("b", "y")], top_k=2) for _ in range(3)]
     assert reranker.available is False
     assert reranker._load_attempted is True
@@ -180,7 +181,8 @@ def test_reranker_load_once_on_success(monkeypatch) -> None:
     fake_st.CrossEncoder = _FakeModel
     monkeypatch.setitem(sys.modules, "sentence_transformers", fake_st)
 
-    reranker = Reranker()
+    # 显式传参：跳过入口缓存探测，直接测懒加载 + 成功只加载一次语义
+    reranker = Reranker(model_name="fake-reranker")
     reranker.rerank("q", [("a", "xxxx"), ("b", "yy")], top_k=2)
     reranker.rerank("q2", [("a", "zzz")], top_k=1)
     assert reranker.available is True
