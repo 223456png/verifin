@@ -8,7 +8,7 @@
 
 ## 一、系统定位
 
-LangGraph 多智能体金融证据校验 RAG 系统：BM25 + Dense 混合检索（多查询合并 + small-to-big 父文档补全）、四要素规则校验（表格 chunk 豁免与排除语义修正）、冲突仲裁与重规划（带失败记忆与原地打转终止）、会话偏好记忆、PoT 安全计算器 + 程序模板执行器（五类模板）+ FinQA DSL 多步执行器与可插拔 LLM 程序生成（失败降级）；检索升级（语义 embedding 替换哈希向量）、可插拔 LLM 规划层（失败降级规则 planner）、多跳 QA 合成管线（四重校验）、MCP Server 能力暴露，`200` 项测试全绿，完成真实 FinQA / ConvFinQA 评测并提供 FastAPI 服务层与 Web Demo。
+LangGraph 多智能体金融证据校验 RAG 系统：BM25 + Dense 混合检索（多查询合并 + small-to-big 父文档补全）、四要素规则校验（表格 chunk 豁免与排除语义修正）、冲突仲裁与重规划（带失败记忆与原地打转终止）、会话偏好记忆、PoT 安全计算器 + 程序模板执行器（五类模板）+ FinQA DSL 多步执行器与可插拔 LLM 程序生成（失败降级）；检索升级（语义 embedding 替换哈希向量）、可插拔 LLM 规划层（失败降级规则 planner）、多跳 QA 合成管线（四重校验）、MCP Server 能力暴露，`244` 项测试全绿，完成真实 FinQA / ConvFinQA 评测并提供 FastAPI 服务层与 Web Demo。
 
 ---
 
@@ -22,9 +22,14 @@ LangGraph 多智能体金融证据校验 RAG 系统：BM25 + Dense 混合检索�
 
 | 移除组件 | 准确率 | 贡献 |
 |---|---|---|
-| Verifier | 80.0% | **+20 pp** |
-| Replanner | 85.0% | **+15 pp** |
+| Verifier | 75.0% | **+25 pp** |
+| Replanner | 100.0% | **+0 pp** |
 | 偏好记忆 | 85.0%（多轮子集 40% vs 100%） | **+15 pp** |
+| 稠密检索（Dense） | 100.0% | **+0 pp** |
+
+> 冲突样本（新闻稿 vs 年报，8.3% 差异 >5%）由 `resolve_conflicts` **确定性仲裁**：
+> 跨可信层级采纳最高可信来源（审计 10-K/年报 > 新闻稿 > 研报），仅最高层自身也冲突才
+> Replan——因此 Replanner 挽救率 0%（冲突在 verifier 层即收敛，无需重规划）。
 
 ### 3. 真实 FinQA test（1,147 题，评测 100 样本）
 

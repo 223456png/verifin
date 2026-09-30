@@ -5,7 +5,7 @@
 > A financial evidence-verification agent built on LangGraph: retrieval is just the input — the real output is a **verifiable, traceable Claim-Evidence binding**, with automatic replanning when evidence fails four-factor verification. Ships with an **MCP server** so any agent client can reuse its retrieval / verification / calculation capabilities.
 
 [![CI](https://github.com/223456png/verifin/actions/workflows/ci.yml/badge.svg)](https://github.com/223456png/verifin/actions/workflows/ci.yml)
-[![tests](https://img.shields.io/badge/tests-242%20passed-brightgreen)](tests/)
+[![tests](https://img.shields.io/badge/tests-244%20passed-brightgreen)](tests/)
 [![python](https://img.shields.io/badge/python-3.10%2B-blue)](pyproject.toml)
 [![license](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
 [![MCP](https://img.shields.io/badge/MCP-server-8A2BE2)](src/verifin/mcp/server.py)
@@ -20,7 +20,7 @@
 | **技术栈** | LangGraph · ChromaDB + BM25 混合检索 · FastMCP · FastAPI · DeepSeek/OpenAI 兼容 LLM（可降级） |
 | **最硬的三个数字** | 真实 FinQA 100 样本 **EM 8.0% → 29.0%**（LLM 程序生成，净 +8 题零回归）· 文档召回 **56% → 88%** · 多跳合成基准 EM **37.5% → 100%** |
 | **最值钱的工程点** | 有**消融数据否定自己初始架构**的实证（LLM planner 反而更差），以及一个三层防御的 **PoT 安全沙箱** |
-| **242 项测试** | 全部离线可复现，默认路径零外部 API 依赖 |
+| **244 项测试** | 全部离线可复现，默认路径零外部 API 依赖 |
 
 ---
 
@@ -350,7 +350,7 @@ curl -X POST http://127.0.0.1:8000/ask \
 ### 运行测试
 
 ```bash
-python -m pytest tests/ -q          # 242 项全绿
+python -m pytest tests/ -q          # 244 项全绿
 python -m pytest tests/ --cov       # 带覆盖率
 ```
 
