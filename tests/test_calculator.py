@@ -69,3 +69,38 @@ def test_calc_runtime_error() -> None:
     result = calc.evaluate("1/0")
     assert result.is_valid is False
     assert result.error
+
+
+# 2026-09-30 安全审计修复：非常量/嵌套幂指数必须在 AST 层快速拒绝——
+# 部署线程与 Windows 没有 SIGALRM 兜底，9**9**9 这类表达式曾可占用
+# 执行器直到算完/内存耗尽。反向测试锁定：毫秒级返回，绝不长跑。
+def test_calc_rejects_nested_power_bomb_fast() -> None:
+    import time as _time
+
+    calc = ExpressionCalculator()
+    for expr in ("9**9**9", "2**(2**20)", "2**2**20"):
+        t0 = _time.monotonic()
+        result = calc.evaluate(expr)
+        elapsed = _time.monotonic() - t0
+        assert result.is_valid is False
+        assert result.error == "power exponent must be an integer constant"
+        # 任何环境下都必须快速确定拒绝（此前该用例可长跑数十秒）
+        assert elapsed < 1.0, f"{expr} took {elapsed:.2f}s"
+
+
+def test_calc_rejects_non_int_power_exponent() -> None:
+    calc = ExpressionCalculator()
+    # float 指数同样无法静态估计（拒）；合法幂走 math.pow 函数路径不受影响
+    assert calc.evaluate("2.0**10.0").is_valid is False
+    assert calc.evaluate("2.0**10.0").error == "power exponent must be an integer constant"
+
+
+def test_calc_legitimate_powers_still_pass() -> None:
+    calc = ExpressionCalculator()
+    # 常量指数 ≤ 上限正常放行
+    assert calc.evaluate("2**999").is_valid is True
+    assert calc.evaluate("2**10").value == 1024
+    # 合法幂但结果超出 float 表示范围 → 确定性错误（修复前是未捕获 OverflowError 炸穿调用方）
+    big = calc.evaluate("(9**9)**999")
+    assert big.is_valid is False
+    assert big.error == "result too large to represent (float overflow)"
