@@ -5,7 +5,7 @@
 > A financial evidence-verification agent built on LangGraph: retrieval is just the input — the real output is a **verifiable, traceable Claim-Evidence binding**, with automatic replanning when evidence fails four-factor verification. Ships with an **MCP server** so any agent client can reuse its retrieval / verification / calculation capabilities.
 
 [![CI](https://github.com/223456png/verifin/actions/workflows/ci.yml/badge.svg)](https://github.com/223456png/verifin/actions/workflows/ci.yml)
-[![tests](https://img.shields.io/badge/tests-225%20passed-brightgreen)](tests/)
+[![tests](https://img.shields.io/badge/tests-242%20passed-brightgreen)](tests/)
 [![python](https://img.shields.io/badge/python-3.10%2B-blue)](pyproject.toml)
 [![license](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
 [![MCP](https://img.shields.io/badge/MCP-server-8A2BE2)](src/verifin/mcp/server.py)
@@ -20,7 +20,7 @@
 | **技术栈** | LangGraph · ChromaDB + BM25 混合检索 · FastMCP · FastAPI · DeepSeek/OpenAI 兼容 LLM（可降级） |
 | **最硬的三个数字** | 真实 FinQA 100 样本 **EM 8.0% → 29.0%**（LLM 程序生成，净 +8 题零回归）· 文档召回 **56% → 88%** · 多跳合成基准 EM **37.5% → 100%** |
 | **最值钱的工程点** | 有**消融数据否定自己初始架构**的实证（LLM planner 反而更差），以及一个三层防御的 **PoT 安全沙箱** |
-| **225 项测试** | 全部离线可复现，默认路径零外部 API 依赖 |
+| **242 项测试** | 全部离线可复现，默认路径零外部 API 依赖 |
 
 ---
 
@@ -180,10 +180,17 @@ python scripts/test_mcp_server.py
 
 | 配置 | 准确率 | Faithfulness | Answer Relevancy | 消融贡献 |
 |---|---|---|---|---|
-| **完整系统** | **100.0%** | **100.0%** | **98.2%** | — |
-| − Verifier | 80.0% | — | — | **+20 pp** |
-| − Replanner | 85.0% | — | — | **+15 pp** |
-| − 偏好记忆（多轮子集 40% vs 100%） | 85.0% | — | — | **+15 pp** |
+| **完整系统** | **85.0%** | **100.0%** | **88.2%** | — |
+| − Verifier | 75.0% | — | — | **+10 pp** |
+| − Replanner | 85.0% | — | — | **+0 pp** |
+| − 偏好记忆（多轮子集 20% vs 80%） | 70.0% | — | — | **+15 pp** |
+| − 稠密检索（Dense） | 85.0% | — | — | **+0 pp** |
+
+> **准确率 85% 而非 100% 的原因（如实披露）**：合成语料故意埋入 3 个
+> NovaTech 营收冲突样本（新闻稿 $11,000m vs 年报 $12,000m，8.3% 差异 >5%
+> 触发 major 冲突 → REJECT），而 Replanner 的挽救率当前为 0%（触发 3 次、
+> 挽救 0 次），故这 3 个样本无法收敛到 $12,000m。这是**真实短板而非隐瞒**：
+> 冲突仲裁与重规划闭环尚未打通，详见 `docs/EVALUATION.md` 的已知局限。
 
 > Faithfulness / Answer Relevancy 为 RAGAs 同名指标的**确定性规则近似**
 > （非 LLM-as-judge）：前者按「通过四要素校验的证据 ∪ PoT 计算产物」
@@ -343,7 +350,7 @@ curl -X POST http://127.0.0.1:8000/ask \
 ### 运行测试
 
 ```bash
-python -m pytest tests/ -q          # 225 项全绿
+python -m pytest tests/ -q          # 242 项全绿
 python -m pytest tests/ --cov       # 带覆盖率
 ```
 

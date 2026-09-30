@@ -302,7 +302,9 @@ class VeriFinService:
             ],
         }
         dialog_state = dict(final.get("dialog_state") or {})
-        dialog_state.setdefault("session_id", conversation_id)
+        # 图中 dialog_state 的 session_id 默认值是空串（dialog_state.py:20），
+        # setdefault 不会覆盖已存在的空串——这里显式回填 API 层会话 id。
+        dialog_state["session_id"] = conversation_id
         return {
             "conversation_id": conversation_id,
             "verdict": verdict or ("VERIFIED" if evidence else "REJECT"),

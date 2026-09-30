@@ -17,7 +17,7 @@ install: ## 安装依赖（pip install -e ".[dev]"）
 lint: ## 静态检查（与 CI 同款）
         ruff check src tests
 
-test: ## 运行全部测试（225 项）
+test: ## 运行全部测试（242 项）
         $(PY) -m pytest tests/ -q
 
 cover: ## 运行测试并输出覆盖率

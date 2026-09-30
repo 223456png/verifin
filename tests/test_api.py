@@ -62,6 +62,9 @@ def test_ask_multi_turn_preference(client: TestClient) -> None:
     ).json()
     assert first["conversation_id"] == conv
     assert first["dialog_state"], "应返回会话状态"
+    # 回归：session_id 曾恒为空串（图中默认 "" 被 setdefault 短路），
+    # 现在必须回填 API 层的 conversation_id
+    assert first["dialog_state"].get("session_id") == conv
 
     second = client.post(
         "/ask",
