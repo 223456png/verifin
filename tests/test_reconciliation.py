@@ -71,15 +71,28 @@ def test_conflict_unit_normalization() -> None:
     assert result["reconciled_unit"] == "million"
 
 
-# 批量校验集成：两条都通过四要素、数值冲突 major → decision REJECT（触发 Replan）
+# 批量校验集成：**同可信层级**（两条 filing）数值冲突 major → decision REJECT（触发 Replan）
 def test_verify_batch_conflict_major_reject() -> None:
+    batch = verify_claim_batch(CLAIM, [
+        _chunk("NovaTech revenue in 2024 was $12,400 million.", "nova-filing-a", "filing"),
+        _chunk("NovaTech revenue in 2024 was $11,000 million.", "nova-filing-b", "filing"),
+    ])
+    assert all(result["passed"] for result in batch["results"])
+    assert batch["conflict"]["level"] == "major"
+    assert batch["decision"] == "REJECT"
+
+
+# 跨可信层级冲突（filing vs news）→ 采纳最高可信来源（审计 10-K > 新闻稿），不再硬 REJECT
+def test_verify_batch_cross_tier_resolved_by_trust() -> None:
     batch = verify_claim_batch(CLAIM, [
         _chunk("NovaTech revenue in 2024 was $12,400 million.", "nova-filing", "filing"),
         _chunk("NovaTech revenue in 2024 was $11,000 million.", "nova-news", "news"),
     ])
     assert all(result["passed"] for result in batch["results"])
-    assert batch["conflict"]["level"] == "major"
-    assert batch["decision"] == "REJECT"
+    assert batch["conflict"]["level"] == "none"
+    assert batch["conflict"]["conflict"] is False
+    assert batch["conflict"]["reconciled_value"] == pytest.approx(12400.0)
+    assert batch["decision"] in ("ACCEPT", "PARTIAL")
 
 
 @pytest.fixture(autouse=True)
@@ -89,14 +102,14 @@ def _clean_registry():
     ToolRegistry().reset()
 
 
-# Agent 集成：双文档大差异冲突 → replan 且重规划子任务要求合并报表口径
+# Agent 集成：**同可信层级**双文档大差异冲突 → replan 且重规划子任务要求合并报表口径
 def test_agent_conflict_replan_integration() -> None:
     register_builtin_tools()
     ToolRegistry().register(
         "retrieve",
         lambda query, top_k=10: [
-            _chunk("NovaTech revenue in 2024 was $12,400 million.", "nova-filing", "filing"),
-            _chunk("NovaTech revenue in 2024 was $11,000 million.", "nova-news", "news"),
+            _chunk("NovaTech revenue in 2024 was $12,400 million.", "nova-filing-a", "filing"),
+            _chunk("NovaTech revenue in 2024 was $11,000 million.", "nova-filing-b", "filing"),
         ],
         "stub retrieve",
         {"type": "object"},

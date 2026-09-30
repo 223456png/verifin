@@ -118,12 +118,17 @@ def test_preference_table_arbitration_combined() -> None:
             },
         ),
     )
-    flags = [flag for flag in final["verify_flags"].values()
-             if isinstance(flag, dict) and (flag.get("conflict") or {}).get("level") == "major"]
-    assert flags, "应触发 major 冲突"
-    conflict = flags[0]["conflict"]
+    flags = [flag for flag in final["verify_flags"].values() if isinstance(flag, dict)]
+    assert flags
+    # 偏好来源（年报）+ 跨可信层级冲突 → 确定性仲裁出数值，不再硬 REJECT
+    resolved = [flag for flag in flags
+                if (flag.get("conflict") or {}).get("reconciled_value") is not None]
+    assert resolved, "偏好命中应确定性仲裁出数值"
+    conflict = resolved[0]["conflict"]
     assert "年报" in conflict.get("preference_note", "")
     # 表格来源的证据数值应正确取出 12,400
-    values = {result["chunk_id"]: result["value"] for result in flags[0]["results"]}
+    values = {result["chunk_id"]: result["value"] for result in resolved[0]["results"]}
     assert values.get("tbl") == 12400.0
-    assert "replanner" in [hook["node"] for hook in final["hooks"]]
+    assert conflict["reconciled_value"] == 12400.0
+    # 偏好命中后确定性仲裁，不再走 replanner
+    assert "replanner" not in [hook["node"] for hook in final["hooks"]]

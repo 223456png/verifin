@@ -176,6 +176,44 @@ def resolve_conflicts(results: List[dict], preferences: Optional[dict] = None) -
         default["conflict"] = True
         default["note"] = "minor discrepancy kept both values"
         return default
+
+    # ---- >5% 大差异：先尝试确定性仲裁，仲裁不了才交给重规划 ----
+    # 1) 显式偏好来源命中且值唯一 → 采纳偏好来源（尊重「只看年报」等限定）。
+    if preferred_source:
+        preferred = [
+            item for item in numeric
+            if _normalize_source_alias(item.get("source_type")) == preferred_source
+        ]
+        preferred_values = {item["base_value"] for item in preferred}
+        if len(preferred_values) == 1:
+            chosen = preferred[0]
+            default["level"] = "none"
+            default["conflict"] = False
+            default["reconciled_value"] = chosen["base_value"]
+            default["reconciled_unit"] = chosen["base_unit"]
+            default["note"] = "user-preferred source adopted (explicit source preference)"
+            return default
+
+    # 2) 冲突值来自不同可信层级且最高可信层值唯一 → 采纳最高可信来源
+    #    （审计口径优先：10-K/年报 > 新闻稿 > 研报）。这是 _SOURCE_TRUST
+    #    已编码的金融常识——新闻稿常是初步口径，审计 10-K 才是最终数。
+    #    仅当最高可信层自身也有多个不同值时才不仲裁（防伪造）。
+    trust_tiers = {_source_trust(item["source_type"]) for item in numeric}
+    if len(trust_tiers) > 1:
+        top_tier = max(trust_tiers)
+        top_items = [
+            item for item in numeric if _source_trust(item["source_type"]) == top_tier
+        ]
+        top_values = {item["base_value"] for item in top_items}
+        if len(top_values) == 1:
+            chosen = top_items[0]
+            default["level"] = "none"
+            default["conflict"] = False
+            default["reconciled_value"] = chosen["base_value"]
+            default["reconciled_unit"] = chosen["base_unit"]
+            default["note"] = "material conflict resolved by source trust (audited > preliminary)"
+            return default
+
     default["level"] = "major"
     default["conflict"] = True
     default["note"] = "material conflict; requires consolidated financial statement figure"

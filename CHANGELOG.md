@@ -14,6 +14,8 @@
 - **`session_count` 语义误导（P2-1）**：原为历史累计数却按"会话数"展示。LRU 后 `sessions` = 当前跟踪数，`/health` 新增 `sessions_total`（累计）
 - **API 无并发上限（P2-2）**：洪峰在单线程执行器前无限堆积。新增并发闸（默认 4，`VERIFIN_MAX_CONCURRENCY`），排队超时快速 503（`ServiceBusyError`）
 - **状态目录依赖启动路径（P1-2）**：合成语料模式的 workspace 从相对路径 `.verifin_api_env` 改为系统临时目录绝对路径，不再随启动 cwd 漂移
+- **冲突仲裁对跨可信层级大差异不仲裁（第三轮审计 #1/#9）**：`resolve_conflicts` 的 >5% 分支一律判 major → REJECT，来源偏好只在 ≤2% 分支生效；而 Replanner 的 `consolidation_refinement` 又因「排除只过滤新检索、不驱逐历史证据」（Phase 11）永远检索不到合并口径 → 新闻稿 $11,000m vs 年报 $12,000m 这类冲突样本恒 REJECT，合成消融完整系统被拉到 85%。现在 >5% 分支改为**确定性仲裁**：①显式偏好来源命中且值唯一 → 采纳；②冲突值来自不同可信层级且最高层唯一 → 采纳最高可信来源（审计 10-K/年报 > 新闻稿 > 研报）；仅当最高可信层自身也冲突才 major → Replan。合成消融恢复 100%，Verifier 贡献 +20 → +25 pp
+- **Replanner 策略优先级错序（第三轮审计 #12 根因）**：`_determine_strategy` 里 `missing` 判断排在 `major conflict` 之前，而大差异冲突场景几乎必混入「指标/实体无法抽取」的干扰 chunk 使 `missing` 恒非空 → `consolidation_refinement` 永远不可达（实测 0% 挽救）。现在 major conflict 优先于 missing
 
 > 审计复核说明（2026-09-30 第二轮）：P0-1 的"SIGALRM 结构性失效 / 永久挂起"论据在 Linux 主线程实测不成立（CPython 3.12 的 `long_pow` 可被 SIGALRM 打断，`9**9**9` 于 1.00s 被 1s 超时兜底拦截）——真实缺口在部署线程 / Windows 无兜底形态，修复方向（AST 层拒非常量指数）不变。"verifier→retriever 直连同查询白烧"待确认项经核实不成立：三个回环分支均推进到下一子任务，query 随之更换，属有意的队列推进设计。
 
