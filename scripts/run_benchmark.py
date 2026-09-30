@@ -96,7 +96,12 @@ def main() -> int:
     dataset = load_dataset(args.dataset, Path(args.data_dir), split=args.split)
     if getattr(dataset, "is_synthetic", False) and \
             args.dataset not in ("synthetic", "synthetic_multihop"):
-        print(f"提示: {args.dataset} 真实数据不可用（目录 {args.data_dir}），已降级内置合成语料（{len(dataset)} 个样本）")
+        print(
+            f"⚠️  降级警告: 请求的数据集 {args.dataset} 真实数据不可用（目录 "
+            f"{args.data_dir} 为空），已降级为内置合成语料（{len(dataset)} 个样本）。"
+            "本报告数字 = 合成语料口径，不代表真实 FinQA 结果；"
+            "摘要 JSON 中 dataset_source 已标记 synthetic。"
+        )
     print(f"数据集 {dataset.name}: {len(dataset)} 个样本 → 评估 {args.max_samples or len(dataset)} 个")
 
     if args.ablation:

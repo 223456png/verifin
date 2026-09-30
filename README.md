@@ -181,7 +181,7 @@ python scripts/test_mcp_server.py
 | 配置 | 准确率 | Faithfulness | Answer Relevancy | 消融贡献 |
 |---|---|---|---|---|
 | **完整系统** | **100.0%** | **100.0%** | **98.2%** | — |
-| − Verifier | 75.0% | — | — | **+25 pp** |
+| − Verifier | 80.0% | — | — | **+20 pp** |
 | − Replanner | 100.0% | — | — | **+0 pp** |
 | − 偏好记忆（多轮子集 40% vs 100%） | 85.0% | — | — | **+15 pp** |
 | − 稠密检索（Dense） | 100.0% | — | — | **+0 pp** |
@@ -191,6 +191,11 @@ python scripts/test_mcp_server.py
 > 对**跨可信层级**冲突采纳最高可信来源（审计 10-K/年报 > 新闻稿 > 研报，
 > 对应内置 `_SOURCE_TRUST`），仅当最高可信层自身也有多个不同值才 REJECT——
 > 因此这 3 个样本无需重规划即收敛到 $12,000m，完整系统 100%。
+>
+> **为什么 − Replanner 贡献为 0 pp**：合成集的全部冲突已被上面的确定性仲裁
+> 消化，重规划需求为 0（20 样本触发 0 次）——这是合成语料的设计使然，
+> 不是 Replanner 无用；真实 FinQA 上重规划有效率为 **50.0%**（见下
+> 「Agent 行为指标」）。
 
 > Faithfulness / Answer Relevancy 为 RAGAs 同名指标的**确定性规则近似**
 > （非 LLM-as-judge）：前者按「通过四要素校验的证据 ∪ PoT 计算产物」
@@ -300,8 +305,10 @@ docker compose up --build
 ### 方式三：真实 FinQA 评测
 
 ```bash
-# 1. 准备数据（FinQA 数据集放入 data/finqa/）
-#    https://github.com/czyssrs/FinQA
+# 1. 准备数据：从 https://github.com/czyssrs/FinQA 下载 test 集，
+#    放为 data/finqa/test.json（约 1,147 题；数据集许可不允许入库，需自备）
+#    ⚠️ 目录为空时 run_benchmark 会降级为内置合成语料并打印警告——
+#    那种情况下报告数字是合成口径，不代表真实 FinQA 结果。
 
 # 2. 构建索引（默认 hash，离线零依赖）
 python scripts/build_index.py --dataset finqa --data-dir ./data/finqa
@@ -321,6 +328,15 @@ python scripts/run_benchmark.py --dataset finqa --ablation --max-samples 50
 # 5. 多轮评测（ConvFinQA）
 python scripts/run_benchmark.py --dataset convfinqa --multi-turn
 ```
+
+复现 README 头部的 **EM 29.0%**（Phase 12.3，LLM 程序生成）还需 LLM key 与对应开关：
+
+```bash
+python scripts/run_benchmark.py --dataset finqa --max-samples 100 --output ./results_llm_repro \
+  --llm-api-key $DEEPSEEK_API_KEY --llm-mode programmer
+```
+
+规则模板基线（21.0%）与调用统计（成功率/延迟）同目录落盘；无 key 时跑的只是规则基线口径。
 
 ### 方式四：作为 MCP 服务接入 Agent 客户端
 
