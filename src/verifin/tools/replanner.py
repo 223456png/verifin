@@ -137,21 +137,26 @@ class Replanner:
     def _determine_strategy(self, failure: FailureMemory, summary: dict) -> str:
         """确定性策略选择（优先级从高到低，Phase 5 设计 §5.3）。
 
-        1. 证据缺失要素 → supplement_retrieval（补定义/计算口径）；
-        2. 多文档大差异冲突 → consolidation_refinement（合并报表口径定向，
+        1. 多文档大差异冲突 → consolidation_refinement（合并报表口径定向，
            Phase 5 冲突仲裁联动）；
+        2. 证据缺失要素 → supplement_retrieval（补定义/计算口径）；
         3. 指标不匹配且记忆中反复出现（≥2 次）→ metric_refinement；
         4. 期间不匹配 → period_refinement；
         5. 实体不匹配 → entity_clarification；
         6. 已尝试 ≥3 个不同子任务仍失败 → alternative_phrasing（换表述）；
         7. 默认 → general_broadening（广度扩展年报）。
-        """
-        if failure.missing:
-            return "supplement_retrieval"
 
+        ⚠️ major 冲突必须**优先于** missing：大差异冲突场景下，检索集中几乎
+        必然混入「指标/实体无法抽取」的干扰 chunk（如 capex 新闻稿），使
+        ``failure.missing`` 恒非空——若 missing 优先，consolidation_refinement
+        将永远不可达（实测曾因此 0% 挽救）。
+        """
         conflict = (failure.verify_result or {}).get("conflict")
         if isinstance(conflict, dict) and conflict.get("level") == "major":
             return "consolidation_refinement"
+
+        if failure.missing:
+            return "supplement_retrieval"
 
         pillars = failure.mismatch_pillars()
         if "metric" in pillars and summary.get("mismatches", {}).get("metric", 0) >= 2:

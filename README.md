@@ -45,7 +45,7 @@ VeriFin 的答案：**以证据校验为中心的 Agent 循环** —— 检索 �
 - **LangGraph 状态机编排**：planner → retriever → verifier → calculator → replanner → reporter 六节点循环，checkpoint 持久化多轮会话；领域逻辑（校验/计算/仲裁）全部为无状态 Tool，与框架解耦、可独立单测
 - **混合检索 + 多查询合并**：BM25 + Dense 双路召回（可插拔 embedding：离线 hash / 语义 bge-small），多子任务检索结果按 chunk_id 去重合并（保留原始问题的强词法信号）；small-to-big 父文档补全，解决表格数值块 BM25 信号弱的问题
 - **四要素校验器**：实体词边界匹配、期间年份交集、指标词典同义词归一、口径 token 重叠率——全部规则化、零 LLM 依赖、确定性可测
-- **冲突仲裁与重规划**：≤2% 数值差异融合均值，>5% 强制 Replan；来源信任度加权（年报申报 > 新闻稿 > 研报）；Replan 按失败原因（缺年份 / 缺指标 / 缺实体）重构查询
+- **冲突仲裁与重规划**：≤2% 数值差异融合均值；>5% 跨可信层级冲突采纳最高可信来源（年报申报 > 新闻稿 > 研报），仅最高可信层自身也冲突才 Replan 收敛合并报表口径；Replan 按失败原因（缺年份 / 缺指标 / 缺实体）重构查询
 - **PoT 安全计算器 + 程序模板执行器**：`calc_expression` 三层防御的受限求值沙箱（AST 节点白名单 + `__builtins__` 置空 + SIGALRM 超时 + 幂次决定性 guard，**禁任意代码 / 禁 IO**，并有反向测试锁定）；FinQA 推导型问题（占 93%）经模板检测 → 候选数值枚举 → 单位归一 → 锚分剪枝 → 确定性求值；五类模板——年份键控（growth_pct / difference）、实体键控（cross_entity_diff 跨实体差值 / argmax_relay 三实体比较接力，实体锚定扫描取证）与短语键控（**ratio**："what percentage of X are Y" 比率题，行标签 × 问题短语双向词重叠锚定分子/分母）
 - **FinQA DSL 多步执行器 + 可插拔 LLM 程序生成（可降级）**：模板外的多步算术（table_sum / table_average / `#N` 步骤引用链）由 `LLMProgramGenerator` 经 `complete(prompt)->str` 注入任意 LLM 生成 DSL 程序，编号候选（`vN` 单值 / `tN` 值组）供其消歧；输出先过结构校验（算子白名单 / 引用越界 / 幻觉候选拒绝）再逐步 PoT 求值——**LLM 输出永不直接执行**；LLM 不可用 / 异常 / 输出非法时自动降级回确定性模板路径（默认行为与无 LLM 基线完全一致）
 - **最小 Tool-Calling Harness（模型驱动循环，~150 行零框架）**：与固定状态机互补的 `ToolCallingHarness`——LLM 按 OpenAI function calling 协议自主决定调什么工具、何时停（`OpenAICompatLLM.chat` 新增 messages+tools 支持，失败返回 None 触发 llm_error 停机）；工具层复用 `ToolRegistry`，未知工具/执行异常以 tool 消息回喂模型自主纠正，三停机条件（finished / max_turns / llm_error）防死循环。**架构定位是诚实分层**：graph 的确定性路由是 EM 基线（LLM planner 自由分解 24% < 规则混合 29% 的消融数据支撑），harness 是开放任务的能力层，不混跑评测口径
@@ -180,17 +180,17 @@ python scripts/test_mcp_server.py
 
 | 配置 | 准确率 | Faithfulness | Answer Relevancy | 消融贡献 |
 |---|---|---|---|---|
-| **完整系统** | **85.0%** | **100.0%** | **88.2%** | — |
-| − Verifier | 75.0% | — | — | **+10 pp** |
-| − Replanner | 85.0% | — | — | **+0 pp** |
-| − 偏好记忆（多轮子集 20% vs 80%） | 70.0% | — | — | **+15 pp** |
-| − 稠密检索（Dense） | 85.0% | — | — | **+0 pp** |
+| **完整系统** | **100.0%** | **100.0%** | **98.2%** | — |
+| − Verifier | 75.0% | — | — | **+25 pp** |
+| − Replanner | 100.0% | — | — | **+0 pp** |
+| − 偏好记忆（多轮子集 40% vs 100%） | 85.0% | — | — | **+15 pp** |
+| − 稠密检索（Dense） | 100.0% | — | — | **+0 pp** |
 
-> **准确率 85% 而非 100% 的原因（如实披露）**：合成语料故意埋入 3 个
-> NovaTech 营收冲突样本（新闻稿 $11,000m vs 年报 $12,000m，8.3% 差异 >5%
-> 触发 major 冲突 → REJECT），而 Replanner 的挽救率当前为 0%（触发 3 次、
-> 挽救 0 次），故这 3 个样本无法收敛到 $12,000m。这是**真实短板而非隐瞒**：
-> 冲突仲裁与重规划闭环尚未打通，详见 `docs/EVALUATION.md` 的已知局限。
+> **冲突样本如何被确定性仲裁**：合成语料故意埋入 3 个 NovaTech 营收冲突样本
+> （新闻稿 $11,000m vs 年报 $12,000m，8.3% 差异 >5%）。`resolve_conflicts`
+> 对**跨可信层级**冲突采纳最高可信来源（审计 10-K/年报 > 新闻稿 > 研报，
+> 对应内置 `_SOURCE_TRUST`），仅当最高可信层自身也有多个不同值才 REJECT——
+> 因此这 3 个样本无需重规划即收敛到 $12,000m，完整系统 100%。
 
 > Faithfulness / Answer Relevancy 为 RAGAs 同名指标的**确定性规则近似**
 > （非 LLM-as-judge）：前者按「通过四要素校验的证据 ∪ PoT 计算产物」
