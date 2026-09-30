@@ -131,6 +131,15 @@ class ExpressionCalculator:
                 "result too large to represent (float overflow)",
                 time.perf_counter() - start,
             )
+        if value is not None and not math.isfinite(value):
+            # inf / nan 在金融口径下没有任何合法语义；若放行会被当作
+            # "已验证数值"进入 Claim-Evidence 链路，形成静默错误值——
+            # 比抛异常更危险，故一律返回确定性错误。
+            # 触发路径：1e400（字面量溢出）、1e400-1e400 / 1e400*0（nan）。
+            return fail(
+                "non-finite result (inf/nan)",
+                time.perf_counter() - start,
+            )
         unit = "%" if _UNIT_PERCENT_RE.search(re.sub(r"\s+", "", expression)) else None
         return ExpressionResult(
             expression=expression,

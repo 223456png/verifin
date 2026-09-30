@@ -104,3 +104,35 @@ def test_calc_legitimate_powers_still_pass() -> None:
     big = calc.evaluate("(9**9)**999")
     assert big.is_valid is False
     assert big.error == "result too large to represent (float overflow)"
+
+
+# 2026-09-30 复验补充：inf / nan 曾以 is_valid=True 返回——
+# 对"可校验计算"而言，把 nan 当作已验证数值送进 Claim-Evidence 链路
+# 是静默错误值（比抛异常更危险：下游无从察觉）。
+# 反向测试锁定：非有限结果必须是确定性错误。
+def test_calc_rejects_non_finite_results() -> None:
+    calc = ExpressionCalculator()
+    non_finite = (
+        "1e400",               # 字面量直接溢出 → inf
+        "-1e400",              # → -inf
+        "1e308*10",            # 乘法溢出 → inf
+        "1e400 - 1e400",       # inf - inf → nan
+        "1e400*0",             # inf * 0 → nan
+        "1e400/1e400",         # inf / inf → nan
+        "sqrt(1e308*1e308)",   # math 函数路径 → inf
+    )
+    for expr in non_finite:
+        result = calc.evaluate(expr)
+        assert result.is_valid is False, f"{expr} 被放行，value={result.value!r}"
+        assert result.error == "non-finite result (inf/nan)", f"{expr} -> {result.error}"
+
+
+def test_calc_finite_values_not_affected_by_non_finite_guard() -> None:
+    calc = ExpressionCalculator()
+    # 接近边界但仍是有限值 → 正常放行，新守卫不能误伤
+    assert calc.evaluate("1e308").is_valid is True
+    assert calc.evaluate("1e308").value == 1e308
+    assert calc.evaluate("2**999").is_valid is True
+    assert calc.evaluate("100").value == 100.0
+    assert calc.evaluate("0").value == 0.0
+    assert calc.evaluate("-0.5").value == -0.5
