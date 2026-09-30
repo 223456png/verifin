@@ -115,3 +115,20 @@ def test_verify_batch_and_claim_extraction() -> None:
     results = VERIFIER.verify_batch(claim, evidence_list)
     assert [r.passed for r in results] == [True, False]
     assert results[1].mismatches  # entity 不匹配
+
+
+def test_verify_claim_empty_claim_not_vacuously_passed() -> None:
+    """四要素全空（如 claim="qwerty 123"）绝不能真空通过。
+
+    回归：此前 `verify_claim` 对无任何可校验要素的 claim 返回 passed=True
+    （checked=0 → mismatches 为空），MCP 调用方会误以为该 claim 已被四要素校验。
+    """
+    from verifin.tools.verifier import verify_claim
+
+    empty = extract_claim("qwerty 123")
+    assert all(empty.get(k) is None for k in ("entity", "period", "metric", "definition"))
+
+    result = verify_claim(empty, {"chunk_id": "evidence", "content": "some random text"})
+    assert result["passed"] is False
+    assert result["confidence"] == 0.0
+    assert any("no checkable elements" in m for m in result["mismatches"])

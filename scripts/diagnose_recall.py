@@ -53,7 +53,13 @@ def main() -> int:
     args = parser.parse_args()
 
     dataset = load_dataset("finqa", Path(args.data_dir), split="test")
-    assert not dataset.is_synthetic, "需要真实 FinQA 数据"
+    if dataset.is_synthetic:
+        print(
+            "错误：需要真实 FinQA 数据（test 集），当前目录下只有 sample。\n"
+            f"     加载器已降级为内置合成语料。请将 FinQA test.jsonl 放入 "
+            f"{args.data_dir}/ 后重试。"
+        )
+        return 2
 
     hash_r = build_hybrid_retriever(persist_dir=Path(args.hash_dir), use_reranker=False)
     bge_r = build_hybrid_retriever(persist_dir=Path(args.bge_dir), use_reranker=False)

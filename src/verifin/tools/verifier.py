@@ -382,6 +382,23 @@ def _result_to_dict(result: VerificationResult) -> dict:
 
 def verify_claim(claim: dict, chunk: dict) -> dict:
     """Tool 包装（单条）：claim dict + 原始 chunk dict → 校验结果 dict。"""
+    if not any(claim.get(k) for k in ("entity", "period", "metric", "definition")):
+        # 四要素全空（如 claim="qwerty 123"）：无任何可校验要素，不得真空通过——
+        # 否则任意无意义 claim 配任意证据都会 passed=true，误导 MCP 调用方。
+        return {
+            "chunk_id": chunk.get("chunk_id", "evidence"),
+            "passed": False,
+            "entity_match": None,
+            "period_match": None,
+            "metric_match": None,
+            "definition_match": None,
+            "mismatches": [
+                "claim has no checkable elements "
+                "(entity/period/metric/definition all empty)"
+            ],
+            "missing": ["entity", "period", "metric", "definition"],
+            "confidence": 0.0,
+        }
     evidence = _DEFAULT_VERIFIER.extractor.extract(chunk)
     return _result_to_dict(_DEFAULT_VERIFIER.verify(claim, evidence))
 
