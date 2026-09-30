@@ -326,7 +326,9 @@ class ReportGenerator:
                 "推导型与布尔型超出规则引擎能力边界，如实报告"
                 if real else
                 "4. 语料为内置合成语料（无外网环境下 Kaggle FinQA 不可用时的离线回退），"
-                "真实 FinQA（2,789 文档 / 1,147 问答）评测结果见 results/finqa_full"
+                "真实 FinQA 评测证据链见 docs/EVALUATION.md 与 results_llm_prog/report.md"
+                "（仓库内白名单入库）；复现步骤（data/finqa/test.json + LLM key）"
+                "见 README「快速开始 · 方式三：真实 FinQA 评测」"
             ),
             "5. Agent 为确定性规则引擎（无 LLM 调用）；Phase 8 已将 PoT 计算器接入主循环"
             "（增长/百分比多跳 → 年份锚定取证 → calc_expression 求增长率），"
