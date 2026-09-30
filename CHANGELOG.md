@@ -5,6 +5,17 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **沙箱嵌套幂 DoS（安全审计 P0-1）**：`9**9**9` 等嵌套幂的指数是表达式，旧幂次 guard 只挡常量指数 → 放行后在部署线程（SIGALRM 不生效）/ Windows（无 SIGALRM）下无任何超时兜底，可占用执行器直到算完或内存耗尽。现在 AST 层拒绝一切非常量 / 非 int 指数（`power exponent must be an integer constant`），常量上限 1000 保留——guard 成为所有运行形态下都成立的唯一防线，不再依赖超时。反向测试锁定：毫秒级确定拒绝
+- **沙箱 float 溢出未捕获（顺带发现）**：`9**999` 等合法常量幂的结果超出 float 表示范围时，`float(raw)` 抛未捕获 `OverflowError` 炸穿调用方。现在返回确定性错误 `result too large to represent (float overflow)`
+- **API 会话表无限累积（P0-2）**：`_threads` 无上限、`MemorySaver` thread 状态不清 → 长跑必挂。改为 LRU（默认 200，`VERIFIN_MAX_SESSIONS` 可调），逐出时同步 `delete_thread` 清理 checkpoint 状态
+- **`session_count` 语义误导（P2-1）**：原为历史累计数却按"会话数"展示。LRU 后 `sessions` = 当前跟踪数，`/health` 新增 `sessions_total`（累计）
+- **API 无并发上限（P2-2）**：洪峰在单线程执行器前无限堆积。新增并发闸（默认 4，`VERIFIN_MAX_CONCURRENCY`），排队超时快速 503（`ServiceBusyError`）
+- **状态目录依赖启动路径（P1-2）**：合成语料模式的 workspace 从相对路径 `.verifin_api_env` 改为系统临时目录绝对路径，不再随启动 cwd 漂移
+
+> 审计复核说明（2026-09-30 第二轮）：P0-1 的"SIGALRM 结构性失效 / 永久挂起"论据在 Linux 主线程实测不成立（CPython 3.12 的 `long_pow` 可被 SIGALRM 打断，`9**9**9` 于 1.00s 被 1s 超时兜底拦截）——真实缺口在部署线程 / Windows 无兜底形态，修复方向（AST 层拒非常量指数）不变。"verifier→retriever 直连同查询白烧"待确认项经核实不成立：三个回环分支均推进到下一子任务，query 随之更换，属有意的队列推进设计。
+
 ### Added
 
 - **工程化基线**：GitHub Actions CI（ruff 静态检查 + Python 3.10/3.11/3.12 测试矩阵 + 覆盖率）、`LICENSE`（MIT）、`.mailmap`（归并早期提交身份）、`.env.example`、`CHANGELOG.md`

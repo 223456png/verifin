@@ -3,7 +3,10 @@
 三层防御：
 - Layer 1: ``ast.parse(mode="eval")`` + 节点白名单（拒绝 Import/Attribute/未注册调用等）；
 - Layer 2: ``eval`` 命名空间禁用 ``__builtins__``，仅暴露 math 函数白名单；
-- Layer 3: SIGALRM 超时（仅主线程生效）+ 决定性 guard（长度/指数上限）保证快速确定拒绝。
+- Layer 3: SIGALRM 超时（仅 Linux 主线程生效；API 工作线程 / Windows 无此
+  兜底）+ 决定性 guard（长度/指数上限）保证快速确定拒绝——guard 是唯一
+  在所有形态下都成立的防线，因此嵌套幂 / 非常量指数必须在 AST 层拒绝，
+  不依赖超时。
 """
 
 from __future__ import annotations
@@ -115,7 +118,19 @@ class ExpressionCalculator:
                 signal.setitimer(signal.ITIMER_REAL, 0)
                 signal.signal(signal.SIGALRM, old_handler)
 
-        value = float(raw) if isinstance(raw, (int, float)) and not isinstance(raw, bool) else None
+        try:
+            value = (
+                float(raw)
+                if isinstance(raw, (int, float)) and not isinstance(raw, bool)
+                else None
+            )
+        except OverflowError:
+            # 合法常量指数也可能溢出 float（如 9**999 ≈ 1e953）——
+            # 返回确定性错误而非未捕获异常炸穿调用方。
+            return fail(
+                "result too large to represent (float overflow)",
+                time.perf_counter() - start,
+            )
         unit = "%" if _UNIT_PERCENT_RE.search(re.sub(r"\s+", "", expression)) else None
         return ExpressionResult(
             expression=expression,
@@ -146,13 +161,18 @@ class ExpressionCalculator:
                 ):
                     return "unsafe function call"
             if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Pow):
-                # 决定性 guard：常量指数过大直接拒绝（防内存炸弹，先于超时兜底）
+                # 决定性 guard：指数必须是 int 常量且 ≤ 上限（防内存炸弹，先于超时兜底）。
+                # 右操作数为表达式（嵌套幂如 9**9**9）或非 int 常量时无法静态
+                # 估计结果规模，一律拒绝——部署线程 / Windows 没有 SIGALRM 兜底，
+                # 这类计算可能占用执行器数十秒以上，必须在 AST 层快速拒绝。
                 right = node.right
-                if (
+                if not (
                     isinstance(right, ast.Constant)
                     and isinstance(right.value, int)
-                    and abs(right.value) > _MAX_POW_EXPONENT
+                    and not isinstance(right.value, bool)
                 ):
+                    return "power exponent must be an integer constant"
+                if abs(right.value) > _MAX_POW_EXPONENT:
                     return f"exponent too large (max {_MAX_POW_EXPONENT})"
         return None
 

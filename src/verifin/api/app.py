@@ -8,8 +8,11 @@ ProgrammingError），而 FastAPI 请求跑在 ASGI 工作线程——因此
 
 from __future__ import annotations
 
+import os
+import tempfile
 import threading
 import uuid
+from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
@@ -70,6 +73,18 @@ class AskResponse(BaseModel):
     dialog_state: Dict[str, Any] = Field(default_factory=dict)
 
 
+class ServiceBusyError(RuntimeError):
+    """并发闸已满：排队超时仍拿不到执行许可（对应 HTTP 503）。"""
+
+
+# 会话表 LRU 上限：无上限时 _threads 与 MemorySaver 里的 thread 状态会随
+# 会话数无限累积（长跑必挂）。逐出最旧会话时同步清理 checkpoint 状态。
+_MAX_SESSIONS = max(1, int(os.environ.get("VERIFIN_MAX_SESSIONS", "200")))
+# 并发闸：单线程执行器实际串行，闸限制排队上限（洪峰快速 503 而非无限堆积）。
+_MAX_CONCURRENCY = max(1, int(os.environ.get("VERIFIN_MAX_CONCURRENCY", "4")))
+_GATE_WAIT_SECONDS = float(os.environ.get("VERIFIN_GATE_WAIT", "5"))
+
+
 class VeriFinService:
     """Agent 图的会话态服务封装（单线程执行器，线程安全）。
 
@@ -90,7 +105,11 @@ class VeriFinService:
         self._dense = dense
         self._graph_factory = graph_factory or build_agent_graph
         self._lock = threading.Lock()
-        self._threads: Dict[str, str] = {}
+        # LRU 会话表：conversation_id -> langgraph thread_id（最旧逐出）
+        self._threads: "OrderedDict[str, str]" = OrderedDict()
+        self._sessions_total = 0
+        self._env = None
+        self._ask_gate = threading.BoundedSemaphore(_MAX_CONCURRENCY)
         self._known_entities: List[str] = []
         # 单线程执行器：chromadb SQLite 线程亲和 → 装配与执行必须同线程
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="verifin-agent")
@@ -104,8 +123,12 @@ class VeriFinService:
             chunks = None
         else:
             chunks: List[DocumentChunk] = synth_chunks()
-            env = RetrievalEnvironment(chunks, workspace=Path(".verifin_api_env"))
+            # 绝对路径：随启动 cwd 漂移会让状态目录在盘上到处生长
+            env = RetrievalEnvironment(
+                chunks, workspace=Path(tempfile.gettempdir()) / ".verifin_api_env"
+            )
             corpus = {"source": "synthetic", "chunks": len(chunks)}
+        self._env = env
         register_builtin_tools()
         _register_retrieve_tool(env, dense=self._dense)
         self._known_entities = self._collect_entities(chunks)
@@ -133,51 +156,86 @@ class VeriFinService:
 
     # ------------------------------------------------------------------
 
+    def _register_session(self, conversation_id: str) -> str:
+        """LRU 登记/复用会话 → thread_id；超限逐出最旧会话并清理其 checkpoint。"""
+        with self._lock:
+            thread_id = self._threads.get(conversation_id)
+            if thread_id is None:
+                thread_id = f"conv-{uuid.uuid4().hex}"
+                self._sessions_total += 1
+            self._threads.pop(conversation_id, None)  # 移到队尾（最近使用）
+            self._threads[conversation_id] = thread_id
+            evicted: list[tuple[str, str]] = []
+            while len(self._threads) > _MAX_SESSIONS:
+                evicted.append(self._threads.popitem(last=False))
+        for _old_conv, old_thread in evicted:
+            # MemorySaver 的 thread 状态随会话累积；逐出时一并清理。
+            checkpointer = getattr(self.graph, "checkpointer", None)
+            if checkpointer is not None:
+                try:
+                    checkpointer.delete_thread(old_thread)
+                except Exception:  # noqa: BLE001 - 清理失败不阻塞服务
+                    pass
+        return thread_id
+
     def ask(self, query: str, conversation_id: Optional[str]) -> dict:
         """执行一轮问答（conversation_id 复用 thread_id → 多轮记忆）。
 
         入口先做查询归一化（中文指标词/年份/虚词 → 检索系统能懂的形态，
         已知实体大小写修正）——仅会话层生效，benchmark 口径不受影响。
+        并发闸已满时抛 :class:`ServiceBusyError`（路由转 503），洪峰快速
+        失败而不是在单线程执行器前无限堆积。
         """
-        from verifin.query_norm import normalize_query
+        acquired = self._ask_gate.acquire(timeout=_GATE_WAIT_SECONDS)
+        if not acquired:
+            raise ServiceBusyError(
+                f"服务忙：并发排队超过 {_GATE_WAIT_SECONDS:.0f} 秒，请稍后重试"
+            )
+        try:
+            from verifin.query_norm import normalize_query
 
-        normalized = normalize_query(query, known_entities=self._known_entities)
-        with self._lock:
+            normalized = normalize_query(query, known_entities=self._known_entities)
             if conversation_id:
-                thread_id = self._threads.setdefault(
-                    conversation_id, f"conv-{uuid.uuid4().hex}"
-                )
+                thread_id = self._register_session(conversation_id)
             else:
                 conversation_id = uuid.uuid4().hex
-                thread_id = f"conv-{uuid.uuid4().hex}"
-                self._threads[conversation_id] = thread_id
-        from concurrent.futures import TimeoutError as FutureTimeoutError
-        try:
-            final = self._executor.submit(
-                self._run, normalized, thread_id
-            ).result(timeout=120)
-        except FutureTimeoutError:
-            final = {
-                "messages": [
-                    {"role": "user", "content": query},
-                    {
-                        "role": "assistant",
-                        "content": (
-                            "本轮处理超时（超过 120 秒安全上限），已终止。"
-                            "请尝试更明确的问题表述（公司名 + 年份 + 指标）后重试。"
-                        ),
-                    },
-                ]
-            }
-        return self._to_response(conversation_id, final)
+                thread_id = self._register_session(conversation_id)
+            from concurrent.futures import TimeoutError as FutureTimeoutError
+            try:
+                final = self._executor.submit(
+                    self._run, normalized, thread_id
+                ).result(timeout=120)
+            except FutureTimeoutError:
+                final = {
+                    "messages": [
+                        {"role": "user", "content": query},
+                        {
+                            "role": "assistant",
+                            "content": (
+                                "本轮处理超时（超过 120 秒安全上限），已终止。"
+                                "请尝试更明确的问题表述（公司名 + 年份 + 指标）后重试。"
+                            ),
+                        },
+                    ]
+                }
+            return self._to_response(conversation_id, final)
+        finally:
+            self._ask_gate.release()
 
     def _run(self, query: str, thread_id: str) -> dict:
         return AgentRunner(self.graph).run(query, thread_id=thread_id)
 
     @property
     def session_count(self) -> int:
+        """当前跟踪中的会话数（LRU 上限内，语义 = 活跃/近期会话）。"""
         with self._lock:
             return len(self._threads)
+
+    @property
+    def sessions_total(self) -> int:
+        """累计新建会话数（含已被 LRU 逐出的）。"""
+        with self._lock:
+            return self._sessions_total
 
     # ------------------------------------------------------------------
 
@@ -284,14 +342,19 @@ def create_app(
         return {
             "status": "ok",
             "corpus": svc.corpus,
+            # 当前跟踪中的会话数（LRU 上限内）与累计新建会话数
             "sessions": svc.session_count,
+            "sessions_total": svc.sessions_total,
         }
 
     @app.post("/ask", response_model=AskResponse)
     def ask(payload: AskRequest) -> JSONResponse:
         if not payload.query.strip():
             raise HTTPException(status_code=422, detail="query 不能为空")
-        result = svc.ask(payload.query, payload.conversation_id)
+        try:
+            result = svc.ask(payload.query, payload.conversation_id)
+        except ServiceBusyError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
         return JSONResponse(result)
 
     @app.get("/")

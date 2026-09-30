@@ -97,3 +97,56 @@ def test_root_serves_demo_or_api_info(client: TestClient) -> None:
         assert "html" in resp.headers.get("content-type", "")
     else:
         assert resp.json()["name"] == "VeriFin API"
+
+
+# 2026-09-30 安全审计修复：会话表 LRU 上限 / 并发闸 503 / 状态目录绝对路径
+def test_session_table_lru_eviction() -> None:
+    """会话表超上限逐出最旧条目：长跑不再无限累积。"""
+
+    from verifin.api.app import _MAX_SESSIONS
+
+    service = _build_service(index_dir=None, dense=True)
+    n = _MAX_SESSIONS + 10
+    for i in range(n):
+        service._register_session(f"conv-{i}")
+    assert service.session_count == _MAX_SESSIONS
+    # 最旧的 conv-0..9 已被逐出，最新 conv-n-1 还在
+    assert "conv-0" not in service._threads
+    assert f"conv-{n - 1}" in service._threads
+    # 累计新建数独立于跟踪数（P2-1：语义不再混淆）
+    assert service.sessions_total == n
+    # 复用已有会话不增加累计数，且刷新 LRU 顺序
+    total_before = service.sessions_total
+    service._register_session(f"conv-{n - 1}")
+    assert service.sessions_total == total_before
+
+
+def test_concurrency_gate_returns_503() -> None:
+    """并发闸占满 → /ask 快速 503，而不是在单线程执行器前无限堆积。"""
+    import threading as _threading
+
+    from verifin.api.app import _GATE_WAIT_SECONDS, ServiceBusyError
+
+    service = _build_service(index_dir=None, dense=True)
+    gate = _threading.BoundedSemaphore(1)
+    gate.acquire()  # 人为占满闸
+    service._ask_gate = gate
+    app = create_app(service=service)
+    with TestClient(app) as c:
+        resp = c.post("/ask", json={"query": "NovaTech 2024 revenue"})
+        assert resp.status_code == 503
+        assert "服务忙" in resp.json()["detail"]
+    gate.release()
+    assert ServiceBusyError is not None
+    assert _GATE_WAIT_SECONDS > 0
+
+
+def test_workspace_state_dir_is_absolute() -> None:
+    """合成语料模式的状态目录必须在系统临时目录下（不随启动 cwd 漂移）。"""
+    import tempfile as _tempfile
+
+    service = _build_service(index_dir=None, dense=True)
+    assert service._env is not None
+    root = Path(service._env.root)
+    assert root.is_absolute()
+    assert str(root).startswith(_tempfile.gettempdir())

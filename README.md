@@ -161,7 +161,7 @@ VERIFIN_INDEX_DIR=./bge_env verifin-mcp
 ### 安全边界
 
 - **只读设计**：四个工具全部无副作用，不暴露写路径、文件系统遍历或 shell
-- **计算沙箱**：`calculate` 为三层防御的受限求值——AST 节点白名单拒绝 `Import`/`Attribute`/未注册调用，`__builtins__` 置空仅暴露 math 白名单，SIGALRM 超时 + 幂次上限保证快速确定性拒绝
+- **计算沙箱**：`calculate` 为三层防御的受限求值——AST 节点白名单拒绝 `Import`/`Attribute`/未注册调用，`__builtins__` 置空仅暴露 math 白名单，SIGALRM 超时（仅 Linux 主线程生效，API 工作线程 / Windows 无此兜底）+ 幂次/指数 guard（嵌套幂与非 int 指数一律快速拒绝）保证快速确定性拒绝
 - **反向测试锁定**：`tests/test_calculator.py` 显式断言 `open('/etc/passwd')`、`__import__('os')`、`().__class__` 均被拒绝
 - **惰性加载**：导入模块不触发磁盘 IO，索引在首次工具调用时加载
 
