@@ -197,6 +197,7 @@ aside h3 {
   padding: 30px 0 26px; z-index: 5;
 }
 .dock-inner { max-width: 1240px; margin: 0 auto; padding: 0 40px; position: relative; }
+.composer { position: relative; }
 #input {
   width: 100%; background: var(--panel-2); border: 1px solid var(--hairline);
   border-radius: 10px; color: var(--paper); font-family: var(--mono); font-size: 14.5px;
@@ -205,7 +206,7 @@ aside h3 {
 }
 #input:focus { border-color: var(--gold); box-shadow: 0 0 0 3px rgba(201,162,39,0.08); }
 #send {
-  position: absolute; right: 47px; top: 50%; transform: translateY(-50%);
+  position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
   background: var(--gold); color: var(--ink); border: none; border-radius: 7px;
   font-family: var(--mono); font-size: 12px; font-weight: 500; letter-spacing: 0.08em;
   padding: 9px 18px; cursor: pointer; text-transform: uppercase; transition: all 0.2s;
@@ -280,8 +281,10 @@ aside h3 {
 
 <div class="dock">
   <div class="dock-inner">
-    <textarea id="input" rows="1" placeholder="输入金融问题，例如：NovaTech 2024 年净利润是多少？"></textarea>
-    <button id="send">提问 →</button>
+    <div class="composer">
+      <textarea id="input" rows="1" placeholder="输入金融问题，例如：NovaTech 2024 年净利润是多少？"></textarea>
+      <button id="send">提问 →</button>
+    </div>
     <div class="hint">Enter 发送 · Shift+Enter 换行 · 同一会话内智能体记住你的偏好</div>
   </div>
 </div>
