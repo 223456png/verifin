@@ -257,6 +257,8 @@ src/verifin/
 - [ ] TAT-QA 跨表推理评测
 - [ ] 重规划策略优化（有效率 50% → 60%）
 - [ ] LLM 辅助实体链接（试过一版，效果不好，原因写在 EVALUATION.md 里）
+- [ ] MCP 工具补 `outputSchema` / `structuredContent` 与只读注解（`readOnlyHint`）：四个工具现在都返回 JSON 字符串，客户端得自己二次解析
+- [ ] 校验裁决与降级路径接 OpenTelemetry 的 GenAI 语义约定，trace 能直接进 Langfuse/Phoenix 看
 
 ## 开发
 
