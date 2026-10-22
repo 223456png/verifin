@@ -7,7 +7,7 @@
 
 ### Fixed
 
-- **沙箱嵌套幂 DoS（安全审计 P0-1）**：`9**9**9` 等嵌套幂的指数是表达式，旧幂次 guard 只挡常量指数 → 放行后在部署线程（SIGALRM 不生效）/ Windows（无 SIGALRM）下无任何超时兜底，可占用执行器直到算完或内存耗尽。现在 AST 层拒绝一切非常量 / 非 int 指数（`power exponent must be an integer constant`），常量上限 1000 保留——guard 成为所有运行形态下都成立的唯一防线，不再依赖超时。反向测试锁定：毫秒级确定拒绝
+- **沙箱嵌套幂 DoS（安全审计 P0-1）**：`9**9**9` 等嵌套幂的指数是表达式，旧幂次 guard 只挡常量指数 → 放行后在部署线程（SIGALRM 不生效）/ Windows（无 SIGALRM）下无任何超时兜底，可占用执行器直到算完或内存耗尽。现在 AST 层拒绝一切非常量 / 非 int 指数（`power exponent must be an integer constant`），常量上限 1000 保留，guard 成为所有运行形态下都成立的唯一防线，不再依赖超时。反向测试锁定：毫秒级确定拒绝
 - **沙箱 float 溢出未捕获（顺带发现）**：`9**999` 等合法常量幂的结果超出 float 表示范围时，`float(raw)` 抛未捕获 `OverflowError` 炸穿调用方。现在返回确定性错误 `result too large to represent (float overflow)`
 - **沙箱放行非有限值（复验补充 P1-3）**：`1e400` / `1e308*10` 返回 `inf`、`1e400 - 1e400` / `1e400*0` / `1e400/1e400` 返回 `nan`，且 `is_valid=True`。非有限值在金融口径下没有任何合法语义，被当作"已验证数值"送入 Claim-Evidence 链路即为**静默错误值**（下游无从察觉，比抛异常更危险）。现在一律返回确定性错误 `non-finite result (inf/nan)`；反向测试覆盖 7 条非有限路径，并锁定 `1e308` / `2**999` / `0` / `-0.5` 等有限极值不被误伤
 - **API 会话表无限累积（P0-2）**：`_threads` 无上限、`MemorySaver` thread 状态不清 → 长跑必挂。改为 LRU（默认 200，`VERIFIN_MAX_SESSIONS` 可调），逐出时同步 `delete_thread` 清理 checkpoint 状态
@@ -17,13 +17,13 @@
 - **冲突仲裁对跨可信层级大差异不仲裁（第三轮审计 #1/#9）**：`resolve_conflicts` 的 >5% 分支一律判 major → REJECT，来源偏好只在 ≤2% 分支生效；而 Replanner 的 `consolidation_refinement` 又因「排除只过滤新检索、不驱逐历史证据」（Phase 11）永远检索不到合并口径 → 新闻稿 $11,000m vs 年报 $12,000m 这类冲突样本恒 REJECT，合成消融完整系统被拉到 85%。现在 >5% 分支改为**确定性仲裁**：①显式偏好来源命中且值唯一 → 采纳；②冲突值来自不同可信层级且最高层唯一 → 采纳最高可信来源（审计 10-K/年报 > 新闻稿 > 研报）；仅当最高可信层自身也冲突才 major → Replan。合成消融恢复 100%，Verifier 贡献 +20 → +25 pp
 - **Replanner 策略优先级错序（第三轮审计 #12 根因）**：`_determine_strategy` 里 `missing` 判断排在 `major conflict` 之前，而大差异冲突场景几乎必混入「指标/实体无法抽取」的干扰 chunk 使 `missing` 恒非空 → `consolidation_refinement` 永远不可达（实测 0% 挽救）。现在 major conflict 优先于 missing
 
-> 审计复核说明（2026-09-30 第二轮）：P0-1 的"SIGALRM 结构性失效 / 永久挂起"论据在 Linux 主线程实测不成立（CPython 3.12 的 `long_pow` 可被 SIGALRM 打断，`9**9**9` 于 1.00s 被 1s 超时兜底拦截）——真实缺口在部署线程 / Windows 无兜底形态，修复方向（AST 层拒非常量指数）不变。"verifier→retriever 直连同查询白烧"待确认项经核实不成立：三个回环分支均推进到下一子任务，query 随之更换，属有意的队列推进设计。
+> 审计复核说明（2026-09-30 第二轮）：P0-1 的"SIGALRM 结构性失效 / 永久挂起"论据在 Linux 主线程实测不成立（CPython 3.12 的 `long_pow` 可被 SIGALRM 打断，`9**9**9` 于 1.00s 被 1s 超时兜底拦截），真实缺口在部署线程 / Windows 无兜底形态，修复方向（AST 层拒非常量指数）不变。"verifier→retriever 直连同查询白烧"待确认项经核实不成立：三个回环分支均推进到下一子任务，query 随之更换，属有意的队列推进设计。
 
 ### Added
 
 - **工程化基线**：GitHub Actions CI（ruff 静态检查 + Python 3.10/3.11/3.12 测试矩阵 + 覆盖率）、`LICENSE`（MIT）、`.mailmap`（归并早期提交身份）、`.env.example`、`CHANGELOG.md`
 - **容器化**：`Dockerfile`、`docker-compose.yml`、`.dockerignore`，`docker compose up --build` 一键启动 Web Demo
-- **文档**：`docs/EVALUATION.md` —— 评测结论、逐阶段工程归因与已知局限的集中汇总
+- **文档**：`docs/EVALUATION.md` ， 评测结论、逐阶段工程归因与已知局限的集中汇总
 - `pyproject.toml`：补齐 `authors` / `keywords` / `classifiers` / `[project.urls]`，新增 `verifin-mcp` 入口点与 `[tool.ruff]` / `[tool.coverage]` 配置
 - README：新增 TL;DR、MCP Server 章节（工具表 + 客户端配置 + 安全边界）、Docker 与 MCP 启动方式
 - **核心消融数字链证据入库**（`results_v*/report.md` + LLM 调用摘要，`full/` 逐样本产物不入库）；`docs/EVALUATION.md` 回溯索引新增「证据状态」列
@@ -32,13 +32,13 @@
 
 - **MCP Server 从 `scripts/mcp_server.py` 迁移到 `src/verifin/mcp/server.py`**，成为包内一等能力，并支持 `python -m verifin.mcp.server` 与 `verifin-mcp` 两种启动方式
 - MCP Server 索引加载改为**惰性**（首次工具调用时触发），导入模块不再要求索引存在，便于 CI 与测试
-- `mcp>=1.0.0` 加入核心依赖 —— 此前 MCP Server 依赖未在 `pyproject.toml` 中声明，包安装后无法直接运行
+- `mcp>=1.0.0` 加入核心依赖 ， 此前 MCP Server 依赖未在 `pyproject.toml` 中声明，包安装后无法直接运行
 - `scripts/test_mcp_server.py`：改用 `sys.executable` 启动子进程（原先硬编码 `.venv/bin/python`，Windows 下不可用），并注入 `PYTHONPATH` 支持源码模式运行
 - `src/verifin/mcp/server.py` 文档中的「无 eval」表述修正为「AST 白名单 + 空 builtins 的受限 eval」，与实际实现保持一致
 
 ### Removed
 
-- `results/resume_numbers.md` —— 内容改写为 `docs/EVALUATION.md`（中性化的评测与局限文档）
+- `results/resume_numbers.md` ， 内容改写为 `docs/EVALUATION.md`（中性化的评测与局限文档）
 
 ---
 
@@ -46,13 +46,13 @@
 
 ### Added
 
-- **最小 Tool-Calling Harness（Phase 13）**：`verifin.harness.ToolCallingHarness` —— LLM 按 OpenAI function calling 协议自主调度 `ToolRegistry` 工具，tool 消息回喂自主纠正，三停机条件（finished / max_turns / llm_error）防死循环；17 项单测锁定调度 / 回喂 / 停机语义。定位为与 graph 确定性路由互补的**开放任务能力层**，不进 EM 评测口径（见 `docs/EVALUATION.md` Phase 13 章节）
+- **最小 Tool-Calling Harness（Phase 13）**：`verifin.harness.ToolCallingHarness` ， LLM 按 OpenAI function calling 协议自主调度 `ToolRegistry` 工具，tool 消息回喂自主纠正，三停机条件（finished / max_turns / llm_error）防死循环；17 项单测锁定调度 / 回喂 / 停机语义。定位为与 graph 确定性路由互补的**开放任务能力层**，不进 EM 评测口径（见 `docs/EVALUATION.md` Phase 13 章节）
 - **LLM 调用接 Structured Outputs（Phase 13.1）**：`response_format` 透传（OpenAI `json_schema` strict 形态；planner schema `financial_plan` / programmer schema `dsl_program`），端点不支持时自动摘除回退（400/422 即摘、不吃退避预算），`--json-schema` 消融开关；8 项测试锁定透传 / 回退 / 接线语义
-- **`--json-schema` 单变量消融实测**（FinQA test 100 样本、programmer 模式、DeepSeek 直连，vs v125 基线）：**EM 31.0% vs 30.0%**（+1pp = 多对 1 题，噪声量级）；LLM 调用 44/44 成功、attempt=1 零重试（基线 45/45 同为 100%——宽容解析在 DeepSeek 上本已零失败，json-schema 买到的是**确定性 schema 保证**而非实测解析救回）；代价 = 平均延迟 524.7ms → 713.2ms（**+36%**）。证据：`results_v13_js/`
+- **`--json-schema` 单变量消融实测**（FinQA test 100 样本、programmer 模式、DeepSeek 直连，vs v125 基线）：**EM 31.0% vs 30.0%**（+1pp = 多对 1 题，噪声量级）；LLM 调用 44/44 成功、attempt=1 零重试（基线 45/45 同为 100%，宽容解析在 DeepSeek 上本已零失败，json-schema 买到的是**确定性 schema 保证**而非实测解析救回）；代价 = 平均延迟 524.7ms → 713.2ms（**+36%**）。证据：`results_v13_js/`
 
 ### 副产物
 
-- **无 LLM 降级基线 EM 22.0%**（key 失效轮：176 次调用全 401、系统静默降级）——与 v122_norank 规则基线 21.0% 吻合，反向验证降级架构：LLM 全挂时管线不崩、EM 回到确定性模板水平
+- **无 LLM 降级基线 EM 22.0%**（key 失效轮：176 次调用全 401、系统静默降级），与 v122_norank 规则基线 21.0% 吻合，反向验证降级架构：LLM 全挂时管线不崩、EM 回到确定性模板水平
 
 ---
 
@@ -61,7 +61,7 @@
 ### Added
 
 - **实体门控激活（Phase 12.5）**：claim 实体缺失的定量修复，EM 29.0% → 30.0%（v125）
-- **LLM 辅助实体链接（Phase 12.5b，诚实负向结果）**：v126 实测 EM 29.0%（-1），链接器仅激活 1/100——内容实体候选稀疏（公司名多在 doc_id 而非正文），根因定性为信息论边界；代码保留（缓存 + 校验 + 降级完备）。证据：`results_v125/`、`results_v126/`
+- **LLM 辅助实体链接（Phase 12.5b，诚实负向结果）**：v126 实测 EM 29.0%（-1），链接器仅激活 1/100，内容实体候选稀疏（公司名多在 doc_id 而非正文），根因定性为信息论边界；代码保留（缓存 + 校验 + 降级完备）。证据：`results_v125/`、`results_v126/`
 
 ---
 
@@ -69,8 +69,8 @@
 
 ### Added
 
-- **MCP Server**（FastMCP stdio）：四工具只读暴露 —— `retrieve` / `expand_document` / `verify_claim` / `calculate`；`VERIFIN_INDEX_DIR` 指定索引；统一 JSON 序列化规避 FastMCP 裸 list 截断
-- `scripts/test_mcp_server.py`：协议级冒烟 —— `initialize` / `tools/list` / 四工具全调用实测通过
+- **MCP Server**（FastMCP stdio）：四工具只读暴露 ， `retrieve` / `expand_document` / `verify_claim` / `calculate`；`VERIFIN_INDEX_DIR` 指定索引；统一 JSON 序列化规避 FastMCP 裸 list 截断
+- `scripts/test_mcp_server.py`：协议级冒烟 ， `initialize` / `tools/list` / 四工具全调用实测通过
 - `scripts/llm_judge.py`：LLM-as-judge（faithfulness + relevancy），证据取四要素校验通过的 chunk，支持 bridge / api-key 双通道
 
 ### Changed
@@ -87,7 +87,7 @@
 
 ### Added
 
-- `llm_provider.py`：`complete(prompt) -> str` 双通道 provider —— `BridgedLLM`（本地桥接）与 `OpenAICompatLLM`（OpenAI 兼容直连）。共同契约：永不抛异常、失败空串触发既有降级、逐调用统计落盘、3 次指数退避重试（3s/6s/12s）
+- `llm_provider.py`：`complete(prompt) -> str` 双通道 provider ， `BridgedLLM`（本地桥接）与 `OpenAICompatLLM`（OpenAI 兼容直连）。共同契约：永不抛异常、失败空串触发既有降级、逐调用统计落盘、3 次指数退避重试（3s/6s/12s）
 - `scripts/summarize_llm_ablation.py`：LLM on/off 自动对比归档
 - `run_benchmark.py`：`--llm-api-key` / `--llm-bridge` / `--llm-mode` 单变量消融开关
 
@@ -106,7 +106,7 @@
 
 ### Fixed
 
-- **跨公司同构表污染**（回归根因）：CME 题召回 GPN 股权计划表，分母短语命中异公司行标签导致分母锚定错误。`_ratio_candidates` 新增守卫 —— ① chunk→doc 映射（检索 + expand 双来源）；② 分母候选与分子最优锚定（按 anchor_score 取优，非扫描序）；③ 不同文档时剔除异文档候选；④ 清空后 total 行回退限定分子同文档
+- **跨公司同构表污染**（回归根因）：CME 题召回 GPN 股权计划表，分母短语命中异公司行标签导致分母锚定错误。`_ratio_candidates` 新增守卫 ， ① chunk→doc 映射（检索 + expand 双来源）；② 分母候选与分子最优锚定（按 anchor_score 取优，非扫描序）；③ 不同文档时剔除异文档候选；④ 清空后 total 行回退限定分子同文档
 - **reranker 失效伪影**：`rerank()` 每次调用重跑 `_load_model()`，HF SSL 阻断时每次检索卡约 40s（100 样本评测被拖至 34 分钟）。改为 `_load_attempted` 失败缓存（每进程只尝试一次），并新增 `RERANKER_MODEL` 环境变量支持本地模型目录离线加载
 
 ### Added
@@ -163,7 +163,7 @@
 
 - ratio 短语键控模板（"what percentage of X are Y"，FinQA test 占 ~17%）
 - `execute_dsl` 多步执行器：`#N` 步骤引用 / `vN`、`tN` 候选绑定 / `const_K` 常量，聚合算子展开后过 PoT 沙箱
-- `LLMProgramGenerator`：可插拔 provider，编号候选供消歧，输出过 `validate_dsl` 结构校验（算子白名单 / 引用越界 / 幻觉候选拒绝）——**LLM 输出永不直接执行**；五类失败均降级回确定性模板
+- `LLMProgramGenerator`：可插拔 provider，编号候选供消歧，输出过 `validate_dsl` 结构校验（算子白名单 / 引用越界 / 幻觉候选拒绝），**LLM 输出永不直接执行**；五类失败均降级回确定性模板
 
 ### Notes
 
