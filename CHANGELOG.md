@@ -7,6 +7,30 @@
 
 ### Fixed
 
+- **答案主句未采用冲突仲裁值（2026-10-22 审查 P0-1）**：synthesizer 取「第一条
+  通过校验的证据」的原始值作主句数值，而 verifier 早已把同指标异值仲裁成
+  `conflict.reconciled_value`。同一问题（`NovaTech 2024 revenue`）因检索顺序
+  不同会答 11000 或 12000，与本项目「年报压过新闻稿」的仲裁结论自相矛盾。
+  现在主句用仲裁值，并输出一行中文披露（哪些值冲突、按什么规则采纳谁）；
+  被压掉的来源仍留在证据卡里，标记「未采纳」；前端徽章区分「仲裁未采纳」与
+  「未通过」
+- **工具注册表进程级单例导致多实例串环境（P0-2）**：`ToolRegistry` 是单例，
+  `retrieve` 工具又是带闭包检索环境的函数，同进程内创建第二个
+  `VeriFinService` 会静默覆盖第一个——症状是 `SQLite objects created in a
+  thread can only be used in that same thread`（chromadb 线程亲和）。新增
+  `ToolRegistry.isolated()` / `activate()` / `restore()`（contextvar），服务
+  持独立注册表并在执行线程内激活；单例默认行为不变，脚本与既有测试零改动
+- **`/ask` 把排队时间算进 120s 超时（P1-1）**：单 worker 执行器被慢请求占住后，
+  后续请求逐个排队并各自耗满 120s 才失败，对外表现为「服务挂死」。改为两段式：
+  排队上限 `VERIFIN_QUEUE_WAIT`（默认 8s，等不到直接 503，被放弃的排队任务不再
+  白跑一轮图），执行段从真正开跑才计时 `VERIFIN_ASK_TIMEOUT`（默认 120s）。
+  `/health` 新增 `timeouts_total`，执行器卡死可被监控先发现
+- **`AskResponse` 与真实响应不一致（P2-1）**：模型缺 `verdict` / `conflict`，而
+  路由返回 `JSONResponse` 绕过 `response_model` 校验 → OpenAPI 里没有这两个
+  字段，客户端按文档取值会 `KeyError`。补齐字段并改回返回 dict 交由
+  `response_model` 校验；`EvidenceItem` 增加 `status` / `reason`
+  （`verify_failed` / `conflict_not_adopted`），Web Demo 的
+  `Evidence · N/M accepted`、`Pass`、`Reject` 改为中文
 - **沙箱嵌套幂 DoS（安全审计 P0-1）**：`9**9**9` 等嵌套幂的指数是表达式，旧幂次 guard 只挡常量指数 → 放行后在部署线程（SIGALRM 不生效）/ Windows（无 SIGALRM）下无任何超时兜底，可占用执行器直到算完或内存耗尽。现在 AST 层拒绝一切非常量 / 非 int 指数（`power exponent must be an integer constant`），常量上限 1000 保留，guard 成为所有运行形态下都成立的唯一防线，不再依赖超时。反向测试锁定：毫秒级确定拒绝
 - **沙箱 float 溢出未捕获（顺带发现）**：`9**999` 等合法常量幂的结果超出 float 表示范围时，`float(raw)` 抛未捕获 `OverflowError` 炸穿调用方。现在返回确定性错误 `result too large to represent (float overflow)`
 - **沙箱放行非有限值（复验补充 P1-3）**：`1e400` / `1e308*10` 返回 `inf`、`1e400 - 1e400` / `1e400*0` / `1e400/1e400` 返回 `nan`，且 `is_valid=True`。非有限值在金融口径下没有任何合法语义，被当作"已验证数值"送入 Claim-Evidence 链路即为**静默错误值**（下游无从察觉，比抛异常更危险）。现在一律返回确定性错误 `non-finite result (inf/nan)`；反向测试覆盖 7 条非有限路径，并锁定 `1e308` / `2**999` / `0` / `-0.5` 等有限极值不被误伤
