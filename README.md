@@ -12,6 +12,8 @@ VeriFin 想把“证据到底能不能用”这一步补上。每条证据都要
 
 一句话：检索只是入口，我要的是一个能溯源、经得起核对的 Claim–Evidence 绑定。
 
+![VeriFin Web Demo：一次提问的完整轨迹](docs/demo.png)
+
 ## 为什么做这个
 
 金融 RAG 最容易在四个地方翻车：
