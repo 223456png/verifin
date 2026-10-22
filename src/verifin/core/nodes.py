@@ -222,7 +222,7 @@ def planner_node(state: Any) -> dict:
     elif calc_spec is not None and calc_spec.get("kind") != "ratio":
         # 计算流（年份键控）：基期/比较期各一个携带四要素的检索子任务；
         # 实体/指标缺失时（真实数据全小写问题）原问题先入队兜底检索
-        # （Phase 10 ratio 走默认单检索路径——双操作数几乎总在同表，
+        # （Phase 10 ratio 走默认单检索路径，双操作数几乎总在同表，
         # 由 calculator 按分子/分母短语锚定取数）
         base_claim = {**claim, "period": calc_spec["base_period"]}
         target_claim = {**claim, "period": calc_spec["target_period"]}
@@ -379,14 +379,14 @@ def retriever_node(state: Any) -> dict:
         logger.warning("retrieve 工具执行失败: {}", result.error)
     # 带记忆（Phase 5 修正版 / Phase 11 语义修正）：排除**只过滤本轮新检索
     # 结果**（不在失败方向的 chunk 上重复检索），**不驱逐历史轮已入池的
-    # 证据**——verifier 对每个子任务按各自 claim 重新校验全部 docs，
+    # 证据**，verifier 对每个子任务按各自 claim 重新校验全部 docs，
     # chunk 在子任务 A 失败不代表在细化后的子任务 B 下无价值；驱逐曾造
     # 成 gold 文档整批丢失（FinQA 26/44 doc recall 失败样本的主因）。
     excluded = set(s.get("exclude_chunk_ids") or [])
     if excluded:
         docs = [doc for doc in docs if doc.get("chunk_id") not in excluded]
     # 多子任务结果合并（Phase 9 修正）：计算流基期/比较期各自检索，若每轮
-    # 覆盖上一轮结果，最终只剩最后一个子任务的文档——原始问题的强词法
+    # 覆盖上一轮结果，最终只剩最后一个子任务的文档，原始问题的强词法
     # 信号被丢弃（FinQA 实测 doc recall 48% → 82%）。按 chunk_id 去重
     # 合并（本轮新结果优先），上限 80（计算流 3 子任务 × top 25 不截断）；
     # multi-query merge 是 RAG 多查询检索的标准做法（LangChain
@@ -423,7 +423,7 @@ def _resolve_primary_entity(docs: list) -> Optional[str]:
 
     投票规则（宁缺勿错）：rank 加权 w=1/(rank+1)，注入需同时满足
     ①赢家原始票数 ≥2（防单个 chunk 的表头大写词被误抽成实体）；
-    ②赢家权重 ≥ 2× 亚军——检索被噪声同构表污染时各公司票数接近，
+    ②赢家权重 ≥ 2× 亚军，检索被噪声同构表污染时各公司票数接近，
     放弃注入避免误杀金标 chunk（[43] 实测：SYY/GIS/ZBH 混排，任何
     简单多数都会错杀）。
     """
@@ -479,7 +479,7 @@ def verifier_node(state: Any) -> dict:
         claim = extract_claim(task) if task else {}
     docs = [doc for doc in (s.get("retrieved_docs") or []) if isinstance(doc, dict)]
     # Phase 12.5 实体门控：claim 缺 entity 时从检索结果注入主实体（多数票），
-    # 激活实体硬校验——跨公司 chunk 在实体要素上 FAIL，通过池精度提升
+    # 激活实体硬校验，跨公司 chunk 在实体要素上 FAIL，通过池精度提升
     if isinstance(claim, dict) and not claim.get("entity"):
         primary = _resolve_primary_entity(docs)
         if primary:
@@ -508,9 +508,9 @@ def verifier_node(state: Any) -> dict:
         (batch.get("conflict") or {}).get("level", "none"),
     )
     # Phase 8（真实数据适配）：计算问题时四要素校验（实体/指标在真实语料抽取困难）
-    # 常被判 REJECT，重规划螺旋对计算流无增益——不走 replanner；
+    # 常被判 REJECT，重规划螺旋对计算流无增益，不走 replanner；
     # Phase 9 修正：基期/比较期检索子任务仍在队列时先跑完（多子任务检索
-    # 结果合并可显著提升 doc recall——首个子任务单路检索常漏 gold），
+    # 结果合并可显著提升 doc recall，首个子任务单路检索常漏 gold），
     # 队列耗尽再进 calculator 做年份锚定数值兜底扫描。
     if s.get("calculation_requested"):
         next_index = index + 1
@@ -686,7 +686,7 @@ def _entity_keyed_candidates(s: dict, program_spec) -> Dict[str, list]:
 def _ratio_candidates(s: dict, program_spec) -> Dict[str, list]:
     """比率流候选收集（Phase 10："what percentage of X are Y"）。
 
-    返回 ``{"num": [ValueCandidate], "den": [ValueCandidate]}``——分子/分母
+    返回 ``{"num": [ValueCandidate], "den": [ValueCandidate]}``，分子/分母
     各自按短语锚定扫描（行标签 × 短语实词重叠）。短语无实词
     （"due in 2018"）时回退年份锚定扫描（问题年份）。
 
@@ -704,7 +704,7 @@ def _ratio_candidates(s: dict, program_spec) -> Dict[str, list]:
     total_fallback: List[tuple] = []
     query_text = _latest_user_query(s)
     year = program_spec.base_period or None
-    # Phase 12：短语内年份锚定——"ratio of the purchase in december 2012
+    # Phase 12：短语内年份锚定，"ratio of the purchase in december 2012
     # to the purchase in january 2013" 的两个年份分别在分子/分母短语内
     # （spec.base_period 为空），按各自短语首个 20xx 年份分别锚定
     def _phrase_year(phrase: Optional[str]) -> Optional[str]:
@@ -747,7 +747,7 @@ def _ratio_candidates(s: dict, program_spec) -> Dict[str, list]:
                 _add(bucket, item, chunk_id, penalty)
         # 分母 total 行回退候选（Phase 10.1）：先缓存，仅当分母短语扫描
         # 完全无候选时兜底启用（"percentage of X" 的 X 几乎总是合计行，
-        # 但 X 短语与行标签常零词重叠——"future minimum rental payments"
+        # 但 X 短语与行标签常零词重叠，"future minimum rental payments"
         # vs 行 "total"）
         for item in EvidenceExtractor.collect_total_values(content):
             total_fallback.append((item, chunk_id, penalty))
@@ -793,7 +793,7 @@ def _ratio_candidates(s: dict, program_spec) -> Dict[str, list]:
     # 短语 "outstanding options" 命中其行标签/列头 → 分母锚到异公司值，
     # num/den 跨公司必然算错）。分母候选与分子最优候选不同文档时：
     # 有同文档候选 → 只留同文档；全部异文档 → 判定污染清空走 total 回退。
-    # 注意取「锚定分最优」的分子（非扫描序首个——[43] 实测扫描序首个
+    # 注意取「锚定分最优」的分子（非扫描序首个，[43] 实测扫描序首个
     # 是异文档弱命中，会把守卫的锚定文档判错）。
     num_doc = None
     if candidates["num"]:
@@ -1032,7 +1032,7 @@ def _calculator_impl(state: Any, llm_programmer=None) -> dict:
     # 1a. 校验通过证据 → 候选（指标匹配的 flag 优先）
     candidates: Dict[str, List[ValueCandidate]] = {}
     # 来源可信度（Phase 6 同款口径）：计算流证据候选对低可信来源
-    # （新闻稿 vs 年报申报文件）加锚分惩罚——同一指标的数值冲突时
+    # （新闻稿 vs 年报申报文件）加锚分惩罚，同一指标的数值冲突时
     # 申报口径优先（合成套件新闻稿 vs 年报冲突样本的预期行为）
     source_types: Dict[str, str] = {}
     for doc in [d for d in (s.get("retrieved_docs") or []) if isinstance(d, dict)]:
@@ -1081,7 +1081,7 @@ def _calculator_impl(state: Any, llm_programmer=None) -> dict:
     # 1b. 检索文档候选扫描：表格感知（列年份对齐/行标签年份 + 指标匹配 +
     #     行标签 × 问题词重叠）优先，字符距离锚定兜底
     query_text = _latest_user_query(s)
-    # Phase 12.1：chunk 级指标门控——与问题**零实词重叠**的 chunk 不产生
+    # Phase 12.1：chunk 级指标门控，与问题**零实词重叠**的 chunk 不产生
     # 候选。年份锚定兜底（collect_year_values）会从任意含年份的 chunk 抓数，
     # 跨公司无关文档（如包装销售散文对税务问题）的候选全为噪声；
     # 金标 chunk 的行标签/章节语境几乎总含问题指标词（实测 ADBE 表 4 词
@@ -1118,11 +1118,11 @@ def _calculator_impl(state: Any, llm_programmer=None) -> dict:
                 )
 
     # 2. 父文档补全（small-to-big，Phase 9）：表格数值所在 chunk 的 BM25 信号弱
-    #    （纯数字行），直接检索常漏——对已检索文档拉取全部 chunk 的**表格感知**
+    #    （纯数字行），直接检索常漏，对已检索文档拉取全部 chunk 的**表格感知**
     #    候选（+0.5 来源惩罚：弱于直接检索的同质量候选，但 metric 命中的
     #    表格行仍强于散文抽取值）。
     #    补全顺序（Phase 9 修正）：按「问题实词 × 该文档已检索 chunk 内容」的
-    #    重叠度排序——合并检索后的文档序号不反映相关度（金标文档可能排到
+    #    重叠度排序，合并检索后的文档序号不反映相关度（金标文档可能排到
     #    40+ 名外），问题关键词命中的文档优先补全。
     from verifin.tools.evidence import EvidenceExtractor as _EE
 
@@ -1290,7 +1290,7 @@ def replanner_node(state: Any) -> dict:
         )
 
     new_task = plan["new_sub_task"]
-    # Phase 11：重复子任务检测——新任务与既有 sub_tasks 文本相同说明重规划
+    # Phase 11：重复子任务检测，新任务与既有 sub_tasks 文本相同说明重规划
     # 原地打转（无新检索方向，实测失败样本连续生成相同任务浪费轮次并污染
     # 失败记忆）→ 视为无新信号，走终止路径（人性化诊断 + END）
     if new_task and new_task in sub_tasks:

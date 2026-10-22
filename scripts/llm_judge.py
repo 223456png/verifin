@@ -3,7 +3,7 @@
 
 对指定 benchmark run 的 results.json 逐样本取证：
 - 证据 = verify_flags 中四要素校验**通过**的 chunk 文本（与验证闭环绑定，
-  而非任意检索结果——与 RAGAs 风格规则指标的口径一致）；
+  而非任意检索结果，与 RAGAs 风格规则指标的口径一致）；
 - judge 模型对 (query, answer, evidence) 输出
   ``{"faithful": bool, "relevancy": 1-5, "reason": str}``；
 - 聚合 faithfulness 率 / 平均 relevancy，落盘 llm_judge.json + 报告。
@@ -26,7 +26,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 _PROMPT = """你是金融问答系统的忠实性评审。给定【问题】【系统答案】【证据】，判定：
-1. faithful：答案的结论是否被证据支持——注意本系统是计算型 PoT 架构，
+1. faithful：答案的结论是否被证据支持，注意本系统是计算型 PoT 架构，
    答案数值允许是【证据中数值的算术运算结果】（如证据含 460.1 与 1020.1，
    答案 45.10% 即为忠实）；只有当数值既不在证据中也非证据数值的合理
    运算结果（凭空编造/引用外部知识）才判 false；
@@ -57,7 +57,7 @@ def _evidence_texts(result: dict, db_path: Path, max_chunks: int = 6) -> list:
     """收集四要素校验通过的 chunk 文本（去重、按答案数值命中排序、截断）。
 
     排序策略：含答案数值的 chunk 优先（judge 需要看到计算输入所在的
-    原始行——冒烟实测前 3 个通过 chunk 常不含金标行，导致答对的题
+    原始行，冒烟实测前 3 个通过 chunk 常不含金标行，导致答对的题
     被误判"编造"）；其余按校验通过顺序补充。
     """
     ids: list = []

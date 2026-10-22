@@ -27,7 +27,7 @@ def extract_answer_value(state: dict, query: str) -> list:
 
     优先级：
     0. 计算答案（Phase 8）：difference / fraction / percentage 三种刻度候选
-       （FinQA 裸数值 GT 刻度不一，逐一覆盖）——优先于 REJECT 门：
+       （FinQA 裸数值 GT 刻度不一，逐一覆盖），优先于 REJECT 门：
        计算问题的末个子任务常被四要素校验 REJECT，但计算产物仍可作为答案；
     1. 最终裁决 REJECT → 无答案（空列表）；
     2. 冲突仲裁的 reconciled_value（时间/来源加权均值，最权威）；

@@ -13,10 +13,10 @@ program（``subtract(5829, 5735), divide(#0, 5735)`` 等）在表格/文本数�
   ``argmax_relay``（多实体比较取极值 + 胜者第二指标接力查找）、``ratio``
   （"what percentage of X is Y" 比率题，占 FinQA test 17%，Phase 10）；
 - 模板外的推导型问题由 Phase 10 :class:`LLMProgramGenerator` 生成 FinQA DSL
-  程序、:func:`execute_dsl` 多步执行（``#N`` 步骤引用）——LLM 不可用时
+  程序、:func:`execute_dsl` 多步执行（``#N`` 步骤引用），LLM 不可用时
   自动降级回确定性模板，行为与 Phase 9 一致；
 - 每年/每实体/每短语候选数值 ≤4（按锚定分排序），组合 ≤16，任一刻度
-  命中 GT 记正确——候选程序枚举是 PoT 方法的确定性近似口径。
+  命中 GT 记正确，候选程序枚举是 PoT 方法的确定性近似口径。
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ from verifin.tools.unit_parser import normalize_to_base
 
 # growth 模板：计算关键词 + 双年份（from X to Y / compare to / between X and Y）
 # Phase 12 追加 ROI 族关键词：gold program 为 subtract(v_end, const_100),
-# divide(#0, const_100)——const_100 是表格指数基期值（2004=100），年份锚定
+# divide(#0, const_100)，const_100 是表格指数基期值（2004=100），年份锚定
 # 扫描天然覆盖，按 growth 公式 (target-base)/|base| 求值语义一致
 _GROWTH_KEYWORDS = (
     "growth", "percentage", "increase", "decrease", "change",
@@ -39,7 +39,7 @@ _GROWTH_KEYWORDS = (
 )
 # difference 模板：净变动关键词 + 单年份（基期 = 上一年，FinQA 高频模式）
 # Phase 12 追加 growth/grew：单年份增长问句（"growth rate in X for 2003"）
-# 的 gold program 同为 subtract(cur, prev), divide(#0, prev)——与净变动
+# 的 gold program 同为 subtract(cur, prev), divide(#0, prev)，与净变动
 # 语义一致（growth_pct 双年份检测在前，不冲突）
 _DIFFERENCE_KEYWORDS = (
     "net change", "change", "difference", "decrease", "increase",
@@ -54,7 +54,7 @@ _COMPARATIVE_RE = re.compile(
 )
 _DIFF_BETWEEN_RE = re.compile(r"\bdifference\s+between\b")
 # argmax 接力模板（Phase 9.7）："which company had the highest <m1> in <year>,
-# and what was its <m2>?" —— 比较取极值 + 胜者第二指标查找（3-hop 链）
+# and what was its <m2>?" ， 比较取极值 + 胜者第二指标查找（3-hop 链）
 _ARGMAX_RELAY_RE = re.compile(
     r"\b(?:which|what)\b.{0,60}?\b(?:company|companies|firm|entity)\b"
     r".*?\b(?P<order>highest|largest|greatest|lowest|smallest)\s+"
@@ -63,7 +63,7 @@ _ARGMAX_RELAY_RE = re.compile(
     re.IGNORECASE | re.DOTALL,
 )
 # ratio 模板（Phase 10）："what percentage/percent/portion/fraction of DEN
-# is/are NUM" → divide(NUM值, DEN值)——FinQA test 占 17% 的比率题型
+# is/are NUM" → divide(NUM值, DEN值)，FinQA test 占 17% 的比率题型
 _RATIO_RE = re.compile(
     r"\bwhat\s+(?:percentage|percent|portion|fraction)\s+of\s+"
     r"(?P<den>.+?)\s+(?:is|are|was|were|do|does|did)\s+(?P<num>.+?)\s*[?.!]*\s*$",
@@ -85,7 +85,7 @@ _HYPHEN_RATIO_RE = re.compile(
 # the income tax benefit to the stock based compensation cost"。
 # 假连接词排除（D2）：due/compared/according/prior/relative/next 后的 to
 # 是短语内连接词（"are due to expire" / "compared to prior year"）而非
-# 分母引导词——lookbehind 不含尾随空格（num 与 to 间的空格由后续
+# 分母引导词，lookbehind 不含尾随空格（num 与 to 间的空格由后续
 # \s+ 消费，检查点在词边界）
 _PCT_OF_TO_RE = re.compile(
     r"\bpercent(?:age)?\s+of\s+(?P<num>.+?)"
@@ -123,7 +123,7 @@ _ENTITY_STOPWORDS = {
     "greater", "bigger", "higher", "lower", "percentage", "growth",
 }
 
-# 合理性剪枝：|增长率| 上限（2000%——财报典型变动远小于此，超限视为锚定错误）
+# 合理性剪枝：|增长率| 上限（2000%，财报典型变动远小于此，超限视为锚定错误）
 _MAX_ABS_GROWTH = 20.0
 # 每年/每组合的候选上限（表格感知 + 距离锚定混合候选，4×4=16 组合内可枚举）
 _MAX_CANDIDATES_PER_YEAR = 4
@@ -139,7 +139,7 @@ class ProgramSpec:
     metric: Optional[str] = None   # planner 填充（claim 四要素）
     entity: Optional[str] = None
     # FinQA 惯例（Phase 9）："percentage DECREASE from 2009 to 2010" 的
-    # program 为 subtract(2009值, 2010值), divide(#0, 2009值)——降幅取正，
+    # program 为 subtract(2009值, 2010值), divide(#0, 2009值)，降幅取正，
     # 与标准方向 (target-base)/base 相反
     reversed: bool = False
     # cross_entity_diff（Phase 9.7）：比较级两侧的实体（A higher than B → A-B）
@@ -236,7 +236,7 @@ def detect_program(query: str) -> Optional[ProgramSpec]:
 
     检测顺序（先具体后一般）：
     1. **argmax_relay**："which company had the highest <m1> in <year>,
-       and what was its <m2>?" —— 多实体比较取极值 + 胜者第二指标接力；
+       and what was its <m2>?" ， 多实体比较取极值 + 胜者第二指标接力；
     1b. **average**（Phase 12）："average <m> between/from Y1 and/to Y2"
        → 年份区间逐年取值求均值（先于 growth：均值语义优先）；
     2. **growth_pct**：计算关键词（含 Phase 12 的 roi / return on
@@ -247,12 +247,12 @@ def detect_program(query: str) -> Optional[ProgramSpec]:
        （双年份归 growth_pct），FinQA test 占 17% 的比率题型；
     3b. **ratio 句式扩展**（Phase 12）：ratio of NUM to DEN /
        NUM-to-DEN ratio / percent of NUM to DEN / NUM as a percentage
-       of DEN / NUM represented what percentage of DEN——双年份放行
+       of DEN / NUM represented what percentage of DEN，双年份放行
        （年份在分子/分母短语内），全部复用 ratio 执行路径；
     4. **cross_entity_diff**：比较级 + than / difference between + 双实体
        （"How much higher was A revenue than B revenue in 2024" → A-B）；
        年份 ≤1 个（双年份归 growth_pct）；
-    5. **difference**：净变动关键词（Phase 12 追加 growth/grew——单年份
+    5. **difference**：净变动关键词（Phase 12 追加 growth/grew，单年份
        增长与净变动 gold program 同构）+ 单一年份（"net change in X
        during 2015"）→ 基期推断为上一年（FinQA 高频模式
        ``subtract(cur, prev)``）；
@@ -322,7 +322,7 @@ def detect_program(query: str) -> Optional[ProgramSpec]:
             )
 
     # 3b. ratio 句式扩展（Phase 12）：ratio_of_to / pct_of_to / as_pct_of /
-    # represented——双年份放行（D3）：两个年份分别在分子/分母短语内
+    # represented，双年份放行（D3）：两个年份分别在分子/分母短语内
     # （"ratio of the purchase in december 2012 to the purchase in
     # january 2013"）；growth_pct 检测在前且需 growth 关键词，无关键词的
     # 双年份 ratio 不会误入 growth
@@ -449,7 +449,7 @@ class ProgramExecutor:
                 if evaluated is not None:
                     # 跨 chunk 组合惩罚：双期数值通常位于同一表格/文档片段
                     # （FinQA program 的操作数几乎总是同表），跨片段组合多为
-                    # 巧合配对——锚分相同时间隔片段的组合应劣后
+                    # 巧合配对，锚分相同时间隔片段的组合应劣后
                     if base.chunk_id and target.chunk_id and base.chunk_id != target.chunk_id:
                         evaluated["anchor_score"] += 1.0
                     combos.append(evaluated)
@@ -681,7 +681,7 @@ class ProgramExecutor:
         alternates ≤2。
 
         GT 刻度：gold program 为 ``add(v1, v2), add(#0, const_2),
-        divide(#1, const_2)``——输出即均值原值（非百分比）。
+        divide(#1, const_2)``，输出即均值原值（非百分比）。
         """
         periods = [p for p in (spec.periods or []) if p] or [
             p for p in (spec.base_period, spec.target_period) if p
@@ -769,7 +769,7 @@ class ProgramExecutor:
         → ``subtract(A值, B值)``。candidates 键为实体名。
 
         双实体数值天然位于不同 chunk（跨文档证据链），故**不施加**
-        同 chunk 偏好与跨 chunk 惩罚——这与 growth_pct（操作数几乎总在
+        同 chunk 偏好与跨 chunk 惩罚，这与 growth_pct（操作数几乎总在
         同表）相反，是多跳语义的差异所在。
         """
         def _bucket(entity: Optional[str]) -> List[ValueCandidate]:
@@ -988,7 +988,7 @@ def execute_dsl(
 
     Args:
         program: ``"subtract(5829, 5735), divide(#0, 5735)"`` 形态的步骤串。
-        bindings: ``{"v1": 8.1, ..., "t1": [1.0, 2.0]}``——``vN`` 单值候选、
+        bindings: ``{"v1": 8.1, ..., "t1": [1.0, 2.0]}``，``vN`` 单值候选、
             ``tN`` 值组（聚合算子参数）。
         evaluator: 表达式求值函数（默认 :func:`calc_expression`；Agent 节点
             注入 ToolRegistry 版本保留 calc 工具族调用轨迹）。

@@ -103,7 +103,7 @@ def test_fallback_on_400_strips_schema_and_retries(monkeypatch) -> None:
 
 
 def test_500_still_raises_to_retry_loop(monkeypatch) -> None:
-    """非 400/422（如 500）不在回退范围——由 _BaseProvider 重试契约处理。"""
+    """非 400/422（如 500）不在回退范围，由 _BaseProvider 重试契约处理。"""
     calls = {"n": 0}
 
     def fake_urlopen(req, timeout=None):

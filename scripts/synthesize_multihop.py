@@ -5,8 +5,8 @@
     python scripts/synthesize_multihop.py --output ./results/multihop_synth
 
 产出：
-    benchmark.json —— 合成的多跳评测基准（统一样本格式 + hops/program 标注）
-    stdout —— 四重校验统计（种子拒绝 / 候选 / 各校验拒绝计数 / 通过）
+    benchmark.json ， 合成的多跳评测基准（统一样本格式 + hops/program 标注）
+    stdout ， 四重校验统计（种子拒绝 / 候选 / 各校验拒绝计数 / 通过）
 """
 
 from __future__ import annotations

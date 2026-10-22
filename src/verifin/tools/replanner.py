@@ -148,7 +148,7 @@ class Replanner:
 
         ⚠️ major 冲突必须**优先于** missing：大差异冲突场景下，检索集中几乎
         必然混入「指标/实体无法抽取」的干扰 chunk（如 capex 新闻稿），使
-        ``failure.missing`` 恒非空——若 missing 优先，consolidation_refinement
+        ``failure.missing`` 恒非空，若 missing 优先，consolidation_refinement
         将永远不可达（实测曾因此 0% 挽救）。
         """
         conflict = (failure.verify_result or {}).get("conflict")
@@ -187,7 +187,7 @@ class Replanner:
 
         - 常规：四要素校验失败（passed=False）的 chunk；
         - ``consolidation_refinement``（大差异冲突）：额外排除**低可信来源**的
-          冲突参与项（如新闻稿），让重检索收敛到年报/10-K 等权威口径——
+          冲突参与项（如新闻稿），让重检索收敛到年报/10-K 等权威口径，
           冲突源排除是「合并报表口径定向」的记忆化实现。
         """
         excludes = [str(item) for item in self.failure_store.get_failed_chunk_ids()]

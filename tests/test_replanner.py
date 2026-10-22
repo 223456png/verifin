@@ -232,7 +232,7 @@ def test_consolidation_excludes_low_trust_conflict_sources() -> None:
     assert "consolidated" in (plan["new_sub_task"] or "")
 
 
-# 11. Phase 11：表格 chunk 豁免——四要素校验失败的表格 chunk 不进排除列表
+# 11. Phase 11：表格 chunk 豁免，四要素校验失败的表格 chunk 不进排除列表
 #     （表格行标签无散文四要素文本，校验失败是结构性的；拉黑会导致重检索
 #     到 gold 表格 chunk 又被过滤 → 端到端 doc recall 56% 的主因）
 def test_failed_chunk_ids_table_exemption() -> None:
@@ -251,7 +251,7 @@ def test_failed_chunk_ids_table_exemption() -> None:
     assert store.get_failed_chunk_ids() == ["c-prose"]
 
 
-# 12. Phase 11：重复子任务终止——新子任务与既有 sub_tasks 相同视为无新信号
+# 12. Phase 11：重复子任务终止，新子任务与既有 sub_tasks 相同视为无新信号
 #     （实测 v10_1 失败样本 replanner 原地打转："retrieve revenue 2016
 #      calculation method" 连续生成两次浪费轮次并污染失败记忆）
 def test_replanner_duplicate_subtask_terminates() -> None:

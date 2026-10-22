@@ -41,7 +41,7 @@ _ROLLFORWARD_ROW_RE = re.compile(
 # 与 "after <year>" → thereafter 行（"due after 2020" → 行 "2021 - thereafter"）
 _PHRASE_YEAR_RE = re.compile(r"\b((?:19|20)\d{2})\b")
 _AFTER_YEAR_RE = re.compile(r"\bafter\s+((?:19|20)\d{2})\b", re.IGNORECASE)
-# Phase 10.1：脚注引用标记（"( 1 ) ( 2 )"）——非财经数值
+# Phase 10.1：脚注引用标记（"( 1 ) ( 2 )"），非财经数值
 _FOOTNOTE_MARKER_RE = re.compile(r"\(\s*\d{1,2}\s*\)")
 # Phase 8：年份锚定抽取的最大字符窗口（数值与年份提及距离超过该值不视为同上下文）
 _YEAR_ANCHOR_WINDOW = 200
@@ -157,7 +157,7 @@ def parse_markdown_tables(text: str) -> List[TableSpec]:
         )
         if separator_index is None:
             # 无分隔行（loader 序化的 FinQA 表格无 |---|）：首行作表头，
-            # 其余全部为数据行——不得额外丢一行（Phase 9 修正：此前
+            # 其余全部为数据行，不得额外丢一行（Phase 9 修正：此前
             # rows[2:] 会把首条数据行当分隔行丢掉，如 "2014 net revenue"）
             tables.append(
                 TableSpec(headers=rows[:1], rows=rows[1:])
@@ -207,7 +207,7 @@ def parse_tables(text: str) -> List[TableSpec]:
 
 
 _YEAR_IN_CELL_RE = re.compile(r"20\d{2}")
-# 纯年份单元格（"2015" / "FY2023"）——首列是纯年份时视为无标签列的年份列
+# 纯年份单元格（"2015" / "FY2023"），首列是纯年份时视为无标签列的年份列
 _PURE_YEAR_CELL_RE = re.compile(r"(?:FY\s?)?20\d{2}", re.IGNORECASE)
 # FinQA 括号负数惯例："(32)" → -32
 _PAREN_NEG_RE = re.compile(r"^\(\s*([\d,.]+)\s*\)$")
@@ -226,7 +226,7 @@ def _table_column_years(table: TableSpec) -> Dict[int, int]:
     """从表头行聚合每列年份；明细行优先（多级表头：组行 FY2024 不应覆盖明细 2023/2024）。
 
     Phase 12.1：首列（行标签列）含日期文本（"Beginning balance as of
-    December 1, 2007"）不是年份列——按列年份对齐会把标签列当年份列，
+    December 1, 2007"）不是年份列，按列年份对齐会把标签列当年份列，
     标签文本被 _parse_cell_value 解析出假数值（"November 28, 2008" → 28）。
     纯年份单元格（"2015"/"FY2023"）仍视为年份列（无标签列的表）。
     """
@@ -307,7 +307,7 @@ class EvidenceExtractor:
         year_starts = {match.start() for match in _YEAR_VALUE_RE.finditer(content)}
         spans: List[Tuple[int, int, float, Optional[str]]] = []
         for match in _VALUE_RE.finditer(content):
-            # match 含 \$?\s* 前缀，match.start() 可能落在前导空白上——
+            # match 含 \$?\s* 前缀，match.start() 可能落在前导空白上，
             # 先定位数字首个字符的真实位置再做排除判断
             leading = len(match.group(0)) - len(match.group(0).lstrip("$ "))
             digit_start = match.start() + leading
@@ -404,7 +404,7 @@ class EvidenceExtractor:
                 key=lambda span: distance(best_num[0], best_num[1], span[0], span[1]),
             )[2]
         # metric：标题指标习惯先于数值出现（"... operating margin, calculated
-        # as ..., was 15%"）——取文中首个指标提及；距离太远（>400 字符，
+        # as ..., was 15%"），取文中首个指标提及；距离太远（>400 字符，
         # 属于别的段落）则退到离选中数值最近的提及。
         metric: Optional[str] = None
         if metric_spans:
@@ -435,7 +435,7 @@ class EvidenceExtractor:
         优先级（anchor_score 越小越可信）：
         0 = 行标签命中指标词典且与程序规格指标一致；
         0.5 = 行标签与用户问题的实词重叠 ≥50%（如 "Standby letters of credit"
-        对 "growth rate in the balance of standby letters of credit"）——
+        对 "growth rate in the balance of standby letters of credit"），
         指标词典外的行标签靠问题词重叠锚定；
         1 = 行标签命中指标词典（未匹配规格）；
         8 = 无信号。
@@ -446,7 +446,7 @@ class EvidenceExtractor:
             column_years = _table_column_years(table)
             cols = [col for col, yr in column_years.items() if str(yr) == str(year)]
             # Phase 12.1：无分隔符 markdown 表的首条数据行会被当表头
-            # （"Beginning balance as of December 1, 2007 | $201,808"）——
+            # （"Beginning balance as of December 1, 2007 | $201,808"），
             # 首单元格「含年份且非纯年份」的表头行按数据行补扫（仅垂直
             # 分支：此类表无列年份对齐，水平分支天然空）
             header_data_rows = [
@@ -469,7 +469,7 @@ class EvidenceExtractor:
                 # 双向取大：长行标签（"cash flows provided by ( used in )
                 # operating activities including discontinued operations"）的
                 # 标签覆盖率被冗余词稀释，但问题侧覆盖率（question tokens
-                # 被标签覆盖的比例）不受影响——两个方向都强才是语义锚定
+                # 被标签覆盖的比例）不受影响，两个方向都强才是语义锚定
                 label_tokens = cls._content_tokens(label)
                 shared = label_tokens & query_tokens
                 # 单 token 命中不启用问题方向覆盖率（"credit"/"balance" 等
@@ -515,12 +515,12 @@ class EvidenceExtractor:
                             _append(parsed[0], parsed[1])
                 # 垂直表：行标签自带年份（"2014 net revenue"）
                 if _YEAR_VALUE_RE.search(label) and str(year) in label:
-                    # Phase 12.1：roll-forward 行结构锚定——「期初/期末/月末余额」
+                    # Phase 12.1：roll-forward 行结构锚定，「期初/期末/月末余额」
                     # 或含月份日期的行标签（"Beginning balance as of December 1,
                     # 2007"）内嵌了精确期间，且双期行几乎总在同 chunk 配对
                     # （跨期变化题的操作数即期初/期末对）；指标词常在章节标题
                     # 而非行标签（ADBE 未确认税务利益 roll-forward 实测），
-                    # 纯词重叠锚定会漏——日期结构信号锚定 0.5 层级
+                    # 纯词重叠锚定会漏，日期结构信号锚定 0.5 层级
                     structural = bool(
                         _ROLLFORWARD_ROW_RE.search(label)
                     )
@@ -586,10 +586,10 @@ class EvidenceExtractor:
           覆盖率取大，越大越可信）；返回值带 ``row_label`` / ``column``
           （LLM program 生成的候选上下文也复用本字段）；
         - **年份 token 匹配**（Phase 10.1）：短语含年份（"due in 2018"）或
-          "after <year>"（→ ``thereafter`` 行）时，纯年份行标签可命中——
+          "after <year>"（→ ``thereafter`` 行）时，纯年份行标签可命中，
           FinQA 到期/承诺表的行标签即年份；
         - **正文句级扫描**（Phase 10.1）：分子常在脚注正文（"42749 shares
-          were repurchased in open-market transactions"）而非表格——
+          were repurchased in open-market transactions"）而非表格，
           非表格行与短语词重叠 ≥ 阈值时，行内数值成为候选
           （``row_label`` = 行首片段，供分母 total 行偏好等下游语义）。
         """
@@ -720,7 +720,7 @@ class EvidenceExtractor:
 
         "what percentage of X" 的 X 几乎总是某张表的合计行（"total" /
         "total xxx" / "xxx total"），但 X 短语与行标签常零词重叠
-        （"future minimum rental payments" vs 行 "total"）——短语锚定
+        （"future minimum rental payments" vs 行 "total"），短语锚定
         扫不到任何分母候选时，以本回退补充。anchor_score 固定 0.75：
         低于真实短语命中（≤0.5），高于泛化兜底（1.25）。
         """

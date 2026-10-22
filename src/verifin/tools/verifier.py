@@ -32,7 +32,7 @@ def _is_table_content(content: str) -> bool:
     """表格 chunk 判定（Phase 11）：markdown 管道行 ≥2 视为表格。
 
     表格行标签（"revenue | 5829"）无散文四要素文本，四要素校验失败是
-    结构性的而非 chunk 无关——据此标记供排除豁免。
+    结构性的而非 chunk 无关，据此标记供排除豁免。
     """
     return sum(1 for line in content.splitlines() if line.strip().startswith("|")) >= 2
 
@@ -196,7 +196,7 @@ def resolve_conflicts(results: List[dict], preferences: Optional[dict] = None) -
 
     # 2) 冲突值来自不同可信层级且最高可信层值唯一 → 采纳最高可信来源
     #    （审计口径优先：10-K/年报 > 新闻稿 > 研报）。这是 _SOURCE_TRUST
-    #    已编码的金融常识——新闻稿常是初步口径，审计 10-K 才是最终数。
+    #    已编码的金融常识，新闻稿常是初步口径，审计 10-K 才是最终数。
     #    仅当最高可信层自身也有多个不同值时才不仲裁（防伪造）。
     trust_tiers = {_source_trust(item["source_type"]) for item in numeric}
     if len(trust_tiers) > 1:
@@ -421,7 +421,7 @@ def _result_to_dict(result: VerificationResult) -> dict:
 def verify_claim(claim: dict, chunk: dict) -> dict:
     """Tool 包装（单条）：claim dict + 原始 chunk dict → 校验结果 dict。"""
     if not any(claim.get(k) for k in ("entity", "period", "metric", "definition")):
-        # 四要素全空（如 claim="qwerty 123"）：无任何可校验要素，不得真空通过——
+        # 四要素全空（如 claim="qwerty 123"）：无任何可校验要素，不得真空通过，
         # 否则任意无意义 claim 配任意证据都会 passed=true，误导 MCP 调用方。
         return {
             "chunk_id": chunk.get("chunk_id", "evidence"),
@@ -470,7 +470,7 @@ def verify_claim_batch(
         result_dict["unit"] = evidence.unit
         result_dict["period"] = evidence.period
         result_dict["source_type"] = metadata.get("source_type", "unknown")
-        # Phase 11：表格 chunk 标记（markdown 管道行 ≥2）——四要素校验对表格
+        # Phase 11：表格 chunk 标记（markdown 管道行 ≥2），四要素校验对表格
         # 天然过严（行标签无散文四要素文本），下游据此豁免排除（见
         # FailureMemoryStore.get_failed_chunk_ids），防 gold 表格被永久拉黑
         result_dict["is_table"] = _is_table_content(str(chunk.get("content") or ""))
@@ -495,7 +495,7 @@ def verify_claim_batch(
             decision = "REJECT"
         else:
             # Phase 8（真实数据适配）：claim 四要素全空（question 中抽取不到
-            # 实体/期间/指标）时，多文档数值必然互异——此时把「融合序首位
+            # 实体/期间/指标）时，多文档数值必然互异，此时把「融合序首位
             # 证据值」作为建议答案写入 reconciled，不再硬 REJECT（否则真实
             # 语料下无约束问题会被 major 冲突全量否决）。
             if passed_items:

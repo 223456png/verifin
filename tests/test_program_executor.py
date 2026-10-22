@@ -363,7 +363,7 @@ def test_execute_ratio_total_row_preference() -> None:
         numerator="due in 2018", denominator="future minimum rental payments",
     )
     # 分母短语与行标签零词重叠：total 行回退候选（anchor 0.75）
-    # 对普通行候选（anchor 0.25 但语义不符）——本例中只有 total 行
+    # 对普通行候选（anchor 0.25 但语义不符），本例中只有 total 行
     result = ProgramExecutor().execute(spec, {
         "num": [
             ValueCandidate(value=301.0, unit=None, period="", chunk_id="c1",
@@ -643,7 +643,7 @@ def test_detect_pct_of_to() -> None:
 
 # 25a. pct_of_to 假连接词：due to / compared to 等不触发
 def test_detect_pct_of_to_false_connectives() -> None:
-    # "due to" 是短语内连接词，非分母引导词——既有 _RATIO_RE 先匹配
+    # "due to" 是短语内连接词，非分母引导词，既有 _RATIO_RE 先匹配
     # （"are" 连接），语义正确且分母不是 "expire"
     spec = detect_program(
         "what percentage of obligations are due to expire in 2018 ?"

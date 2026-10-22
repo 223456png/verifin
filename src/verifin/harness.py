@@ -8,7 +8,7 @@
 
 设计约束（约 150 行，零框架依赖）：
 
-- 协议最小化：LLM 侧只需实现 ``chat(messages, tools) -> dict | None``——
+- 协议最小化：LLM 侧只需实现 ``chat(messages, tools) -> dict | None``，
   返回 ``{"content": str, "tool_calls": [{"id", "name", "args"}]}``，失败返回
   ``None``（与 :meth:`verifin.llm_provider.OpenAICompatLLM.chat` 对齐，
   永不抛异常契约同源）；

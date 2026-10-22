@@ -1,7 +1,7 @@
 """FastAPI 应用工厂与路由实现。
 
 线程模型（重要）：chromadb 的 SQLite 句柄**线程亲和**（跨线程使用抛
-ProgrammingError），而 FastAPI 请求跑在 ASGI 工作线程——因此
+ProgrammingError），而 FastAPI 请求跑在 ASGI 工作线程，因此
 ``VeriFinService`` 用**单线程执行器**承载「索引装配 + Agent 图执行」
 全程（bootstrap 与 ask 都提交到同一线程），主线程仅做 HTTP 编解码。
 """
@@ -182,7 +182,7 @@ class VeriFinService:
         """执行一轮问答（conversation_id 复用 thread_id → 多轮记忆）。
 
         入口先做查询归一化（中文指标词/年份/虚词 → 检索系统能懂的形态，
-        已知实体大小写修正）——仅会话层生效，benchmark 口径不受影响。
+        已知实体大小写修正），仅会话层生效，benchmark 口径不受影响。
         并发闸已满时抛 :class:`ServiceBusyError`（路由转 503），洪峰快速
         失败而不是在单线程执行器前无限堆积。
         """
@@ -249,7 +249,7 @@ class VeriFinService:
         answer = str(answers[-1]["content"]) if answers else ""
 
         # 证据：verify_flags 中 passed 的 chunk（含抽取值；content/doc 信息
-        # 从 retrieved_docs 按 chunk_id 补齐——verify 结果只带 chunk_id）
+        # 从 retrieved_docs 按 chunk_id 补齐，verify 结果只带 chunk_id）
         chunk_meta: Dict[str, dict] = {}
         for doc in (final.get("retrieved_docs") or []):
             if not isinstance(doc, dict):
@@ -303,7 +303,7 @@ class VeriFinService:
         }
         dialog_state = dict(final.get("dialog_state") or {})
         # 图中 dialog_state 的 session_id 默认值是空串（dialog_state.py:20），
-        # setdefault 不会覆盖已存在的空串——这里显式回填 API 层会话 id。
+        # setdefault 不会覆盖已存在的空串，这里显式回填 API 层会话 id。
         dialog_state["session_id"] = conversation_id
         return {
             "conversation_id": conversation_id,

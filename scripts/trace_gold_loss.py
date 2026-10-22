@@ -5,7 +5,7 @@
   1. 终态 retrieved_docs 是否含 gold doc（gt_in_retrieved 口径复现）；
   2. 终态 exclude_chunk_ids 是否包含 gold doc 的 chunk（拉黑实锤）；
   3. 用终态子任务重放检索（不过滤 excluded）能否命中 gold doc
-     ——命中则说明损耗来自 exclude 过滤而非检索层。
+     ，命中则说明损耗来自 exclude 过滤而非检索层。
 """
 
 from __future__ import annotations

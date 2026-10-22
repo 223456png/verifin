@@ -6,7 +6,7 @@
   时 ``generate`` 返回 ``None``，calculator 降级回确定性模板路径；
 - 程序执行复用 :func:`verifin.tools.program_executor.execute_dsl`
   （算子白名单 + ``#N`` 引用校验 + PoT 沙箱求值），LLM 输出**永不直接
-  执行**——先过 ``validate_dsl`` 结构校验，再逐步求值。
+  执行**，先过 ``validate_dsl`` 结构校验，再逐步求值。
 
 诚实边界：默认路径（无 LLM）行为与 Phase 9 完全一致，评测数字零外部
 依赖可复现；LLM 路径为可选增强，未接入真实 provider 跑全量评测
@@ -49,7 +49,7 @@ $candidates
 """)
 
 # Structured Outputs（Phase 13.1）：DSL 程序输出的 JSON Schema（OpenAI strict）。
-# 程序串内的算子 / 引用合法性仍由 validate_dsl 结构校验兜底——schema 只保证
+# 程序串内的算子 / 引用合法性仍由 validate_dsl 结构校验兜底，schema 只保证
 # 「输出是个 {"program": str}」，不放宽「LLM 输出永不直接执行」的防线。
 PROGRAMMER_RESPONSE_FORMAT = {
     "type": "json_schema",
@@ -119,7 +119,7 @@ class LLMProgramGenerator:
         Args:
             query: 用户问题。
             candidates: ``[{"id": "v1", "value": 8.1, "context": "row: leased
-                facilities | col: total"}, ...]``——calculator 收集的编号候选
+                facilities | col: total"}, ...]``，calculator 收集的编号候选
                 （单值 ``vN``；值组 ``tN`` 的 value 为数值列表）。
 
         Returns:

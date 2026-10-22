@@ -71,7 +71,7 @@ def test_calc_runtime_error() -> None:
     assert result.error
 
 
-# 2026-09-30 安全审计修复：非常量/嵌套幂指数必须在 AST 层快速拒绝——
+# 2026-09-30 安全审计修复：非常量/嵌套幂指数必须在 AST 层快速拒绝，
 # 部署线程与 Windows 没有 SIGALRM 兜底，9**9**9 这类表达式曾可占用
 # 执行器直到算完/内存耗尽。反向测试锁定：毫秒级返回，绝不长跑。
 def test_calc_rejects_nested_power_bomb_fast() -> None:
@@ -106,7 +106,7 @@ def test_calc_legitimate_powers_still_pass() -> None:
     assert big.error == "result too large to represent (float overflow)"
 
 
-# 2026-09-30 复验补充：inf / nan 曾以 is_valid=True 返回——
+# 2026-09-30 复验补充：inf / nan 曾以 is_valid=True 返回，
 # 对"可校验计算"而言，把 nan 当作已验证数值送进 Claim-Evidence 链路
 # 是静默错误值（比抛异常更危险：下游无从察觉）。
 # 反向测试锁定：非有限结果必须是确定性错误。

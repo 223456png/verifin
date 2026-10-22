@@ -60,7 +60,7 @@ History: $history
 """)
 
 # Structured Outputs（Phase 13.1）：plan 输出的 JSON Schema（OpenAI strict 形态）。
-# 经 OpenAICompatLLM(response_format=...) 透传给支持 json_schema 的端点——
+# 经 OpenAICompatLLM(response_format=...) 透传给支持 json_schema 的端点，
 # 模型层保证输出结构合法，解析失败分支从「常态防御」降级为「纯保险」；
 # 不支持的端点由 provider 自动摘除回退，行为与无 schema 完全一致。
 PLANNER_RESPONSE_FORMAT = {

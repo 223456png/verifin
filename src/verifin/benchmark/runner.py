@@ -10,7 +10,7 @@
    元数据 + HybridRetriever（Reranker 无模型时按 Phase 2 契约自动降级），
    测试/演示全程跑真实检索流水线，不用 stub；
 4. **多轮评估不用 checkpoint 线程**，改为显式携带 ``messages + dialog_state``
-   到下一轮 initial_state——每轮 hooks/步数指标干净隔离，且更可调试。
+   到下一轮 initial_state，每轮 hooks/步数指标干净隔离，且更可调试。
 """
 
 from __future__ import annotations
@@ -118,7 +118,7 @@ def build_benchmark_graph(
 ):
     """按消融配置构建图；完整配置 == 生产图，其余为临时变体。
 
-    ``llm_planner`` / ``llm_programmer``（Phase 12.3）透传给生产图——
+    ``llm_planner`` / ``llm_programmer``（Phase 12.3）透传给生产图，
     消融变体（非 FULL_CONFIG）不含 LLM 路径，与既有数字口径一致。
     """
     config = dict(config)
@@ -181,7 +181,7 @@ class RetrievalEnvironment:
         self, chunks: List[DocumentChunk], workspace: Path, embedding: str = "hash"
     ) -> None:
         # 每次初始化使用唯一子目录：前一次运行的 SQLite/Chroma 句柄可能仍持有
-        # 文件句柄，删除会触发 readonly 冲突——唯一目录天然幂等且可重复运行
+        # 文件句柄，删除会触发 readonly 冲突，唯一目录天然幂等且可重复运行
         self.root = Path(workspace) / f".index_env-{uuid.uuid4().hex[:8]}"
         self.root.mkdir(parents=True, exist_ok=True)
         self.bm25 = BM25Index()
@@ -221,7 +221,7 @@ def _register_retrieve_tool(env: RetrievalEnvironment, dense: bool) -> None:
     """把检索环境注册为 `retrieve` 工具（覆盖内置默认；dense=False 仅走 BM25）。
 
     同时注册 `expand_document`（small-to-big 文档补全）：检索 chunk 只定位到
-    文档，证据抽取可拉取该文档全部 chunk——财报表格常被分块切断，表格数值
+    文档，证据抽取可拉取该文档全部 chunk，财报表格常被分块切断，表格数值
     所在 chunk 的 BM25 信号弱（纯数字行），父文档全量扫描是表格问答的
     标准补救（Phase 9）。
     """

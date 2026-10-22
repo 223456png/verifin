@@ -3,7 +3,7 @@
 
 对 FinQA test 前 100 样本中检出 ratio 模板的题，把 gold 记录全文
 （pre_text + table + post_text，与 loader 同口径序列化）直接作为唯一
-"检索结果" 喂给候选收集 + 比率执行器，统计 EM——剥离检索层，单独度量
+"检索结果" 喂给候选收集 + 比率执行器，统计 EM，剥离检索层，单独度量
 短语锚定的精度（端到端 EM 的上界分解依据）。
 
 用法：.venv/bin/python scripts/verify_ratio_ideal.py

@@ -10,7 +10,7 @@ hash-dense 为词法级信号，召回对比断言采用「∀query hybrid ≥ b
 - GT 文档「短而精确」：hash-dense 的 L2 归一使其余弦相似度占优；
 - 干扰文档「长且高频重复查询词」：BM25 的 tf 使其稀疏分占优；
 - 语料含 6 个查询、3 组可证明的严格提升案例（Titan 组 / Lunar 组 / 公共词
-  revenue 组——BM25 的 tf 淹没 GT、dense 的 L2 归一以短精确文档找回），
+  revenue 组，BM25 的 tf 淹没 GT、dense 的 L2 归一以短精确文档找回），
   其余案例验证「≥」保持语义。
 """
 

@@ -44,7 +44,7 @@ def minmax_normalize(values: Sequence[float], degenerate: float) -> List[float]:
 
     Args:
         values: 数值序列。
-        degenerate: 全同分（分母为 0）时的取值——加权融合用 0.5（避免单元素
+        degenerate: 全同分（分母为 0）时的取值，加权融合用 0.5（避免单元素
             列表被归零），最终展示分用 0.0（全同分即无区分度）。
 
     Returns:

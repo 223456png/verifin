@@ -49,7 +49,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--llm-api-key", default=os.environ.get("LLM_API_KEY"),
         help="OpenAI 兼容端点直连的 API key（配合 --llm-api-base/--llm-model）。"
-             "推荐通过环境变量 LLM_API_KEY 传入——命令行参数会留在 shell 历史与进程列表中",
+             "推荐通过环境变量 LLM_API_KEY 传入，命令行参数会留在 shell 历史与进程列表中",
     )
     parser.add_argument(
         "--llm-api-base",
