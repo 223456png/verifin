@@ -153,3 +153,61 @@ def test_workspace_state_dir_is_absolute() -> None:
     root = Path(service._env.root)
     assert root.is_absolute()
     assert str(root).startswith(_tempfile.gettempdir())
+
+
+# ---------------------------------------------------------------------------
+# 2026-10 修复：仲裁采纳值必须进答案主句 + 证据卡标注未采纳 + 排队快速 503
+# ---------------------------------------------------------------------------
+
+def test_answer_uses_arbitrated_value_not_first_evidence(client: TestClient) -> None:
+    """同指标异值（新闻稿 11000 / 年报 12000）→ 主句必须是仲裁采纳的 12000。
+
+    回归背景：synthesizer 原来取「第一条通过校验的 evidence」，检索顺序一变
+    答案就在 11000 与 12000 之间跳变，与本项目自己的"来源可信度仲裁"结论
+    自相矛盾。
+    """
+    for query in ("NovaTech 2024 revenue", "What was NovaTech revenue in 2024?"):
+        body = client.post("/ask", json={"query": query}).json()
+        assert "12000" in body["answer"], body["answer"]
+        assert "11000.0 million" not in body["answer"].split("\n")[0]
+        # 仲裁结果对客户端可见（可核对，不用去猜）
+        assert body["conflict"]["reconciled_value"] == 12000.0
+        assert body["conflict"]["level"] == "none"
+        # 未采纳的数值仍然展示，但标成 excluded + 原因
+        losers = [
+            e for e in body["evidence"]
+            if e["chunk_id"] == "nt-news-revenue-2024"
+        ]
+        assert losers, "冲突来源应保留在证据卡里"
+        assert losers[0]["status"] == "excluded"
+        assert losers[0]["reason"] == "conflict_not_adopted"
+
+
+def test_openapi_documents_verdict_and_conflict(client: TestClient) -> None:
+    """response_model 必须覆盖 verdict/conflict，否则客户端按文档取值会 KeyError。"""
+    schema = client.get("/openapi.json").json()
+    props = schema["components"]["schemas"]["AskResponse"]["properties"]
+    assert "verdict" in props
+    assert "conflict" in props
+
+
+def test_executor_busy_returns_503_fast() -> None:
+    """执行器被占满时，排队请求应快速 503，而不是排队到超时才失败。"""
+    import time
+
+    from verifin.api.app import ServiceBusyError, _build_service
+
+    service = _build_service(index_dir=None, dense=True)
+    blocker = __import__("threading").Event()
+    service._executor.submit(blocker.wait)  # 占住唯一的执行线程
+    started = time.monotonic()
+    try:
+        service.ask("NovaTech 2024 revenue", None)
+    except ServiceBusyError as exc:
+        assert "执行器繁忙" in str(exc)
+    else:  # pragma: no cover - 失败时的明确信号
+        raise AssertionError("executor busy 应抛 ServiceBusyError")
+    finally:
+        blocker.set()
+    # 排队上限 8s，必须远小于旧的 120s 整体超时
+    assert time.monotonic() - started < 20

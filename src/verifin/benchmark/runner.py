@@ -217,7 +217,11 @@ class RetrievalEnvironment:
         return env
 
 
-def _register_retrieve_tool(env: RetrievalEnvironment, dense: bool) -> None:
+def _register_retrieve_tool(
+    env: RetrievalEnvironment,
+    dense: bool,
+    registry: Optional["ToolRegistry"] = None,
+) -> None:
     """把检索环境注册为 `retrieve` 工具（覆盖内置默认；dense=False 仅走 BM25）。
 
     同时注册 `expand_document`（small-to-big 文档补全）：检索 chunk 只定位到
@@ -225,7 +229,7 @@ def _register_retrieve_tool(env: RetrievalEnvironment, dense: bool) -> None:
     所在 chunk 的 BM25 信号弱（纯数字行），父文档全量扫描是表格问答的
     标准补救（Phase 9）。
     """
-    registry = ToolRegistry()
+    registry = registry or ToolRegistry()
 
     def hybrid_retrieve(
         query: str, top_k: int = 10, use_reranker: bool = True,

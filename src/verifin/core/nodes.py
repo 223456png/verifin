@@ -92,7 +92,7 @@ def _hook(
 
 def _call_tool(name: str, **args: Any) -> Any:
     """经 ToolRegistry 执行工具；未注册/失败返回 None（节点层可做领域回退）。"""
-    registry = ToolRegistry()
+    registry = ToolRegistry.current()
     func = registry.get(name)
     if func is None:
         return None
@@ -371,7 +371,7 @@ def retriever_node(state: Any) -> dict:
         args={"query": task, "top_k": 25},  # FinQA 实测 gold 常排在 21-25 名
         call_id=uuid.uuid4().hex,
     )
-    result = ToolRegistry().execute(call)
+    result = ToolRegistry.current().execute(call)
     docs: List[dict] = []
     if result.success:
         docs = _coerce_docs(result.output)
@@ -1388,11 +1388,74 @@ def _calculation_line(s: dict) -> Optional[str]:
     return line
 
 
+def _reconciled_answer_value(flags: Dict[str, Any]) -> Optional[dict]:
+    """取冲突仲裁给出的采纳值（``conflict.reconciled_value``）。
+
+    校验节点已经把多文档同指标异值仲裁成了单一采纳值（来源可信度
+    层级 / 偏好来源 / 加权融合）。答案主句必须用这个值，不能用"第一条
+    通过校验的 evidence"的原始值——否则同一个问题会因为检索顺序不同
+    在 11000 与 12000 之间跳变，答案与自身裁决自相矛盾。
+
+    Returns:
+        ``{"value": float, "unit": str|None, "note": str}``；无仲裁值时 None。
+    """
+    for flag in flags.values():
+        if not isinstance(flag, dict):
+            continue
+        conflict = flag.get("conflict")
+        if not isinstance(conflict, dict):
+            continue
+        value = conflict.get("reconciled_value")
+        if value is None:
+            continue
+        return {
+            "value": value,
+            "unit": conflict.get("reconciled_unit"),
+            "note": str(conflict.get("note") or ""),
+            "values": conflict.get("values") or [],
+        }
+    return None
+
+
+def _conflict_disclosure_line(reconciled: Optional[dict]) -> Optional[str]:
+    """多来源数值不一致时，生成一行"采纳了哪个值、为什么"的中文披露。
+
+    只在确实存在 ≥2 个不同数值时输出，避免正常路径被噪声行污染。
+    """
+    if not reconciled:
+        return None
+    values = [
+        v for v in (reconciled.get("values") or [])
+        if isinstance(v, dict) and v.get("base_value") is not None
+    ]
+    distinct = sorted({round(float(v["base_value"]), 6) for v in values})
+    if len(distinct) < 2:
+        return None
+    shown = " / ".join(f"{v:g}" for v in distinct)
+    unit = reconciled.get("unit") or ""
+    chosen = reconciled.get("value")
+    note = reconciled.get("note") or ""
+    if "trust" in note:
+        why = "按来源可信层级（经审计年报优先于新闻稿）"
+    elif "preference" in note:
+        why = "按您指定的来源偏好"
+    elif "rounding" in note or "weighted" in note:
+        why = "按时间与来源加权融合"
+    else:
+        why = "按仲裁规则"
+    suffix = f" {unit}" if unit else ""
+    return (
+        f"多来源数值不一致（{shown}{suffix}），已{why}采纳 {chosen}{suffix}；"
+        "未采纳的数值在证据卡中标注为已排除。"
+    )
+
+
 def synthesizer_node(state: Any) -> dict:
     """最终合成：仅绑定``results[].passed``通过的证据，生成带引用与校验裁决的答案。
 
     Phase 3 兼容：verify_flags 无 results 结构但有 passed 标记时，绑定全部检索文档。
     Phase 8：calculation_result 有值时首行输出计算答案（证据值绑定计算）。
+    仲裁优先：存在 ``conflict.reconciled_value`` 时主句用采纳值，而非首条证据原值。
     """
     s = _as_dict(state)
     flags: Dict[str, Any] = s.get("verify_flags") or {}
@@ -1417,19 +1480,24 @@ def synthesizer_node(state: Any) -> dict:
         verified_docs = []
 
     if verified_docs:
-        # 首条通过校验证据的数值（提取型主句用）
+        # 主句数值：仲裁采纳值优先，其次才是首条通过校验证据的原始值
+        reconciled = _reconciled_answer_value(flags)
         first_value = None
         first_unit = ""
-        for flag in flags.values():
-            if not isinstance(flag, dict):
-                continue
-            for result in flag.get("results") or []:
-                if isinstance(result, dict) and result.get("passed"):
-                    first_value = result.get("value")
-                    first_unit = result.get("unit") or ""
+        if reconciled is not None:
+            first_value = reconciled["value"]
+            first_unit = reconciled["unit"] or ""
+        else:
+            for flag in flags.values():
+                if not isinstance(flag, dict):
+                    continue
+                for result in flag.get("results") or []:
+                    if isinstance(result, dict) and result.get("passed"):
+                        first_value = result.get("value")
+                        first_unit = result.get("unit") or ""
+                        break
+                if first_value is not None:
                     break
-            if first_value is not None:
-                break
 
         # 本轮问题的 claim（主句主体描述用）
         query_claim = extract_claim(_latest_user_query(s))
@@ -1442,12 +1510,32 @@ def synthesizer_node(state: Any) -> dict:
         confirmation = preference_confirmation(s.get("dialog_state") or {})
         if confirmation:
             lines.insert(0, confirmation)
+        # 仲裁披露：多来源数值不一致时，明确说明采纳了哪个值（可核对）
+        conflict_line = _conflict_disclosure_line(reconciled)
+        if conflict_line:
+            lines.insert(1 if lines else 0, conflict_line)
         for doc in verified_docs:
             source = (
                 (doc.get("metadata") or {}).get("doc_id")
                 or doc.get("chunk_id", "unknown")
             )
-            lines.append(f"- {doc.get('content', '')[:160]} [doc: {source}]")
+            marker = ""
+            if reconciled is not None:
+                doc_value = next(
+                    (
+                        result.get("value")
+                        for flag in flags.values() if isinstance(flag, dict)
+                        for result in (flag.get("results") or [])
+                        if isinstance(result, dict)
+                        and result.get("chunk_id") == doc.get("chunk_id")
+                    ),
+                    None,
+                )
+                if doc_value is not None and round(float(doc_value), 6) != round(
+                    float(reconciled["value"]), 6
+                ):
+                    marker = "（未采纳）"
+            lines.append(f"- {doc.get('content', '')[:160]}{marker} [doc: {source}]")
         answer = "\n".join(lines)
     elif calc_line:
         # 计算完成但无可绑定文档（极端情况）：仍输出证据值计算答案

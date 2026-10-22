@@ -8,11 +8,18 @@ from __future__ import annotations
 
 import threading
 import time
+from contextvars import ContextVar
 from typing import Any, Callable, Dict, List, Optional
 
 from loguru import logger
 
 from verifin.schemas import ToolCall, ToolResult
+
+# 当前生效的注册表。默认 None → 回落到进程级单例（单 Agent 场景的原有行为）；
+# 服务层可激活一个 isolated() 实例，使多个服务实例在同一进程内互不覆盖。
+_ACTIVE_REGISTRY: ContextVar[Optional["ToolRegistry"]] = ContextVar(
+    "verifin_active_registry", default=None
+)
 
 
 class ToolRegistry:
@@ -23,6 +30,10 @@ class ToolRegistry:
         registry = ToolRegistry()
         registry.register("calc", lambda expr: eval_ast(expr), "计算表达式", schema)
         result = registry.execute(ToolCall(tool_name="calc", args={...}, call_id=...))
+
+    多实例（同一进程内跑多个服务 / 基准 vs API 并存）请用 :meth:`isolated`
+    + :meth:`activate`：单例本身是进程级的，``retrieve`` 工具带闭包环境，
+    后注册的实例会静默抢走前一个实例的检索环境。
     """
 
     _instance: Optional["ToolRegistry"] = None
@@ -38,6 +49,31 @@ class ToolRegistry:
                     instance._history: List[ToolCall] = []
                     cls._instance = instance
         return cls._instance
+
+    # ------------------------------------------------------------------ 实例
+    @classmethod
+    def isolated(cls) -> "ToolRegistry":
+        """新建一个不参与单例的独立注册表（服务/基准隔离用）。"""
+        instance = object.__new__(cls)
+        instance._tools = {}
+        instance._history = []
+        return instance
+
+    @classmethod
+    def current(cls) -> "ToolRegistry":
+        """取当前生效的注册表：已激活的独立实例，否则进程级单例。"""
+        active = _ACTIVE_REGISTRY.get()
+        return active if active is not None else cls()
+
+    @classmethod
+    def activate(cls, registry: "ToolRegistry"):
+        """把某个注册表设为当前上下文生效（返回 token，供恢复）。"""
+        return _ACTIVE_REGISTRY.set(registry)
+
+    @staticmethod
+    def restore(token) -> None:
+        """恢复 ``activate`` 之前的注册表。"""
+        _ACTIVE_REGISTRY.reset(token)
 
     def register(
         self, name: str, func: Callable, description: str, schema: dict
@@ -119,11 +155,11 @@ def set_preference(dialog: dict, key: str, value: Any, source: str = "explicit")
     return updated
 
 
-def register_builtin_tools() -> None:
+def register_builtin_tools(registry: Optional[ToolRegistry] = None) -> None:
     """注册内置工具（Agent 初始化时调用；同名覆盖便于测试注入 stub）。"""
     from verifin.tools.retriever import retrieve
 
-    registry = ToolRegistry()
+    registry = registry or ToolRegistry()
     registry.register(
         name="retrieve",
         func=retrieve,
@@ -139,7 +175,7 @@ def register_builtin_tools() -> None:
             "required": ["query"],
         },
     )
-    register_verifier_tools()
+    register_verifier_tools(registry=registry)
     registry.register(
         name="get_preferences",
         func=get_preferences,
@@ -163,14 +199,14 @@ def register_builtin_tools() -> None:
     )
 
 
-def register_verifier_tools() -> None:
+def register_verifier_tools(registry: Optional[ToolRegistry] = None) -> None:
     """注册 Phase 4/5 校验/计算/证据抽取/单位换算工具（由 register_builtin_tools 调用）。"""
     from verifin.tools.calculator import calc_expression
     from verifin.tools.evidence import extract_evidence
     from verifin.tools.unit_parser import convert_unit
     from verifin.tools.verifier import verify_claim, verify_claim_batch
 
-    registry = ToolRegistry()
+    registry = registry or ToolRegistry()
     registry.register(
         name="verify_claim",
         func=verify_claim,

@@ -1452,7 +1452,7 @@ function renderTurn(query, data) {
     const block = el("section", "block");
     const h = el("div", "block-head");
     h.append(el("h3", "", "证据"));
-    h.append(el("span", "block-meta", `Evidence · ${accepted.length}/${evidence.length} accepted`));
+    h.append(el("span", "block-meta", `证据 · 采纳 ${accepted.length}/${evidence.length}`));
     block.append(h);
 
     const grid = el("div", "ev-grid");
@@ -1462,7 +1462,11 @@ function renderTurn(query, data) {
 
       const evHead = el("div", "ev-head");
       evHead.append(el("span", "ev-idx", `E${i + 1}`));
-      evHead.append(el("span", isAccepted ? "badge ok" : "badge reject", isAccepted ? "Pass" : "Reject"));
+      // 徽章沿用后端裁决：仲裁未采纳 ≠ 校验失败，原因分开显示
+      const badgeText = isAccepted
+        ? "通过"
+        : (item.reason === "conflict_not_adopted" ? "仲裁未采纳" : "未通过");
+      evHead.append(el("span", isAccepted ? "badge ok" : "badge reject", badgeText));
       cardEl.append(evHead);
 
       cardEl.append(el("div", "ev-text", esc(item.content || "（无摘要）")));
