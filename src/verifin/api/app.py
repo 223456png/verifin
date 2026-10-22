@@ -333,7 +333,7 @@ def create_app(
     """应用工厂（测试可注入 service / index_dir）。"""
     app = FastAPI(
         title="VeriFin API",
-        version="0.1.0",
+        version="0.13.1",
         description="金融证据校验 Agent（LangGraph + 混合检索 + 程序执行器）",
     )
     svc = service or _build_service(index_dir=index_dir, dense=dense)
