@@ -6,7 +6,7 @@
 [![license](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
 [![MCP](https://img.shields.io/badge/MCP-server-8A2BE2)](src/verifin/mcp/server.py)
 
-![VeriFin Web Demo：一次提问的完整轨迹](docs/demo.png)
+![VeriFin Web Demo：一次提问的完整轨迹](https://ghproxy.net/https://raw.githubusercontent.com/223456png/verifin/main/docs/demo.png)
 
 金融问答的 RAG 有个老问题：检索到一段“看起来相关”的文字，就直接拿去当证据。可实际上年份可能对不上、指标可能不是同一个、口径可能一个是 GAAP、一个是 adjusted。模型不操心这些，照样算，最后给你一个看着挺像回事、其实站不住的答案。
 
