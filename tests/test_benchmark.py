@@ -149,7 +149,7 @@ def test_report_generation(tmp_path) -> None:
         "configs": configs,
     }
     text = ReportGenerator(tmp_path).generate(summary)
-    for section in ("实验配置", "消融实验结果", "关键结论", "Agent 行为指标", "诚实声明"):
+    for section in ("实验配置", "消融实验结果", "关键结论", "Agent 行为指标", "局限说明"):
         assert section in text
     assert "| 完整系统 |" in text and "| 仅 BM25（无 Dense） |" in text
     assert "70.0%" in text  # 准确率格式化

@@ -1,4 +1,4 @@
-"""Markdown 报告生成器：消融对比表 + 关键结论 + Agent 行为指标 + 错误分析 + 诚实声明。"""
+"""Markdown 报告生成器：消融对比表 + 关键结论 + Agent 行为指标 + 错误分析 + 局限说明。"""
 
 from __future__ import annotations
 
@@ -137,13 +137,13 @@ class ReportGenerator:
     }
 
     def _section_answer_types(self, full: dict, summary: dict) -> list:
-        """Phase 8：答案类型分解（诚实口径：规则引擎的能力边界按题型分开陈述）。"""
+        """Phase 8：答案类型分解（数据口径：规则引擎的能力边界按题型分开陈述）。"""
         type_accuracy = full.get("type_accuracy") or {}
         if not type_accuracy:
             return []
         total = full.get("total", 0)
         lines = [
-            "## 答案类型分解（真实数据诚实口径）",
+            "## 答案类型分解（真实数据数据口径）",
             "",
             "| 类型 | 样本数 | 占评估集 | 准确率 |",
             "|------|--------|---------|--------|",
@@ -283,7 +283,7 @@ class ReportGenerator:
             "说明：两指标为 RAGAs 同名指标的**确定性规则近似**（非 LLM-as-judge），",
             "优点是零外部依赖、可复现、可进 CI；与 LLM 评测的相关性未标定，",
             "适用于跨配置相对比较（消融表中各配置同口径计算），不宜与 LLM 评测",
-            "绝对值直接对标（诚实边界）。",
+            "绝对值直接对标（边界说明）。",
             "",
         ]
 
@@ -309,7 +309,7 @@ class ReportGenerator:
     def _section_honesty(self, summary: dict) -> list:
         real = summary.get("dataset_source") != "synthetic"
         return [
-            "## 诚实声明",
+            "## 局限说明",
             "",
             "1. Tool F1 使用 pseudo-gold 标签（规则生成，非人工标注）："
             "增长类多跳问题要求 calc 工具族，其余样本要求 retrieve + verify；"
