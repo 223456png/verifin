@@ -1,7 +1,7 @@
 # VeriFin
 
 [![CI](https://github.com/223456png/verifin/actions/workflows/ci.yml/badge.svg)](https://github.com/223456png/verifin/actions/workflows/ci.yml)
-[![tests](https://img.shields.io/badge/tests-244%20passed-brightgreen)](tests/)
+[![tests](https://img.shields.io/badge/tests-247%20passed-brightgreen)](tests/)
 [![python](https://img.shields.io/badge/python-3.10%2B-blue)](pyproject.toml)
 [![license](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
 [![MCP](https://img.shields.io/badge/MCP-server-8A2BE2)](src/verifin/mcp/server.py)
@@ -61,7 +61,7 @@ VeriFin 想把“证据到底能不能用”这一步补上。每条证据都要
 
 **校验用规则，不用 LLM。** 四要素全部是确定性规则：实体做词边界匹配（防止 Apple 命中 Applebee）、期间取年份交集、指标靠同义词词典归一、口径看定义描述的 token 重叠率。好处是同一个输入永远同一个结果，能进评测口径、能单测。代价是会漏检，所以我让规则只做保守拒绝，漏的交给 replanner 和冲突仲裁兜底。
 
-**冲突按可信度裁，不投票。** 数值差在 2% 以内当口径噪声，融合均值；超过 5% 就按来源可信层级裁，年报（经审计）> 新闻稿 > 研报。三个研报说 110 亿，也压不过一个年报说 120 亿。只有最可信那一层自己都对不上时，才判 REJECT 去重规划。
+**冲突按可信度裁，不投票。** 数值差在 2% 以内当口径噪声，融合均值；超过 5% 就按来源可信层级裁，年报（经审计）> 新闻稿 > 研报。三个研报说 110 亿，也压不过一个年报说 120 亿。只有最可信那一层自己都对不上时，才判 REJECT 去重规划。裁决结果会写进答案：主句用的是 `conflict.reconciled_value`（不是「第一条通过校验的证据」的原始值），并附一行说明为什么采纳这个值；被压掉的来源仍留在证据卡里，标成未采纳。
 
 **检索双路，融合只看排名。** BM25 抓精确数值和指标名，向量抓同义改写，两路都用。融合用 RRF 而不是分数加权，因为 BM25 的分数没有上界、cosine 有界，直接加权没意义。表格被切碎后单独一块词法信号弱，就用 small-to-big：检索用小块，返回时补全父文档。
 
@@ -157,7 +157,7 @@ curl -X POST http://127.0.0.1:8000/ask \
 跑测试：
 
 ```bash
-python -m pytest tests/ -q     # 244 项，全离线
+python -m pytest tests/ -q     # 247 项，全离线
 ```
 
 ## 评测结果
@@ -257,6 +257,8 @@ src/verifin/
 - [ ] TAT-QA 跨表推理评测
 - [ ] 重规划策略优化（有效率 50% → 60%）
 - [ ] LLM 辅助实体链接（试过一版，效果不好，原因写在 EVALUATION.md 里）
+- [ ] MCP 工具补 `outputSchema` / `structuredContent` 与只读注解（`readOnlyHint`）：四个工具现在都返回 JSON 字符串，客户端得自己二次解析
+- [ ] 校验裁决与降级路径接 OpenTelemetry 的 GenAI 语义约定，trace 能直接进 Langfuse/Phoenix 看
 
 ## 开发
 

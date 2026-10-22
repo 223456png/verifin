@@ -18,7 +18,8 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse
+from loguru import logger
 from pydantic import BaseModel, Field
 
 from verifin.benchmark.dataset import synth_chunks
@@ -29,7 +30,7 @@ from verifin.benchmark.runner import (
 from verifin.core.graph import build_agent_graph
 from verifin.core.runner import AgentRunner
 from verifin.schemas import DocumentChunk
-from verifin.tools.registry import register_builtin_tools
+from verifin.tools.registry import ToolRegistry, register_builtin_tools
 
 
 def _web_dir() -> Path:
@@ -60,14 +61,23 @@ class EvidenceItem(BaseModel):
     value: Optional[float] = None
     unit: Optional[str] = None
     period: Optional[str] = None
+    status: str = Field("accepted", description="accepted=采纳 / excluded=未采纳或未通过校验")
+    reason: Optional[str] = Field(
+        None, description="排除原因：conflict_not_adopted / verify_failed / missing_value"
+    )
 
 
 class AskResponse(BaseModel):
     """``POST /ask`` 响应体。"""
 
     conversation_id: str
+    verdict: str = Field("REJECT", description="本轮裁决：VERIFIED / PARTIAL / REJECT")
     answer: str
     calculation: Dict[str, Any] = Field(default_factory=dict)
+    conflict: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="多来源数值仲裁结果（level / reconciled_value / note / values）",
+    )
     evidence: List[EvidenceItem] = Field(default_factory=list)
     trajectory: Dict[str, Any] = Field(default_factory=dict)
     dialog_state: Dict[str, Any] = Field(default_factory=dict)
@@ -83,6 +93,11 @@ _MAX_SESSIONS = max(1, int(os.environ.get("VERIFIN_MAX_SESSIONS", "200")))
 # 并发闸：单线程执行器实际串行，闸限制排队上限（洪峰快速 503 而非无限堆积）。
 _MAX_CONCURRENCY = max(1, int(os.environ.get("VERIFIN_MAX_CONCURRENCY", "4")))
 _GATE_WAIT_SECONDS = float(os.environ.get("VERIFIN_GATE_WAIT", "5"))
+# 排队等待上限：拿到执行器许可后，若工作线程迟迟不空闲（上一个请求卡住），
+# 快速 503 而不是让新请求继续排队、最终把「排队时间」算进超时预算。
+_QUEUE_WAIT_SECONDS = float(os.environ.get("VERIFIN_QUEUE_WAIT", "8"))
+# 单轮执行预算：**只算真正开始执行之后的时间**，不含排队时间。
+_ASK_TIMEOUT_SECONDS = float(os.environ.get("VERIFIN_ASK_TIMEOUT", "120"))
 
 
 class VeriFinService:
@@ -111,6 +126,10 @@ class VeriFinService:
         self._env = None
         self._ask_gate = threading.BoundedSemaphore(_MAX_CONCURRENCY)
         self._known_entities: List[str] = []
+        self._timeouts_total = 0
+        # 独立注册表：retrieve 工具带闭包检索环境，走进程级单例会被同进程
+        # 的第二个服务实例静默覆盖（表现为 chromadb 跨线程报错 / 检索串库）。
+        self._registry = ToolRegistry.isolated()
         # 单线程执行器：chromadb SQLite 线程亲和 → 装配与执行必须同线程
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="verifin-agent")
         self.graph, self.corpus = self._executor.submit(self._bootstrap).result()
@@ -129,8 +148,8 @@ class VeriFinService:
             )
             corpus = {"source": "synthetic", "chunks": len(chunks)}
         self._env = env
-        register_builtin_tools()
-        _register_retrieve_tool(env, dense=self._dense)
+        register_builtin_tools(registry=self._registry)
+        _register_retrieve_tool(env, dense=self._dense, registry=self._registry)
         self._known_entities = self._collect_entities(chunks)
         return self._graph_factory(), corpus
 
@@ -183,8 +202,11 @@ class VeriFinService:
 
         入口先做查询归一化（中文指标词/年份/虚词 → 检索系统能懂的形态，
         已知实体大小写修正），仅会话层生效，benchmark 口径不受影响。
-        并发闸已满时抛 :class:`ServiceBusyError`（路由转 503），洪峰快速
-        失败而不是在单线程执行器前无限堆积。
+
+        超时语义（两段式，避免"排队时间被算成执行时间"）：
+        1. 排队段：最长 ``_QUEUE_WAIT_SECONDS`` 等工作线程空闲，等不到 → 503；
+        2. 执行段：真正开始跑之后才起算 ``_ASK_TIMEOUT_SECONDS``，超时返回
+           降级答案，并计入 ``timeouts_total`` 供 /health 暴露执行器卡死。
         """
         acquired = self._ask_gate.acquire(timeout=_GATE_WAIT_SECONDS)
         if not acquired:
@@ -201,19 +223,36 @@ class VeriFinService:
                 conversation_id = uuid.uuid4().hex
                 thread_id = self._register_session(conversation_id)
             from concurrent.futures import TimeoutError as FutureTimeoutError
+
+            started = threading.Event()
+            abandoned = threading.Event()
+            future = self._executor.submit(
+                self._run, normalized, thread_id, started, abandoned
+            )
+            if not started.wait(timeout=_QUEUE_WAIT_SECONDS):
+                # 排在别人后面：放弃这次排队，工作线程空闲后会立刻短路返回，
+                # 不让被放弃的请求在后面偷偷跑一整轮图。
+                abandoned.set()
+                raise ServiceBusyError(
+                    f"执行器繁忙：上一个请求仍在运行（已排队 "
+                    f"{_QUEUE_WAIT_SECONDS:.0f} 秒），请稍后重试"
+                )
             try:
-                final = self._executor.submit(
-                    self._run, normalized, thread_id
-                ).result(timeout=120)
+                final = future.result(timeout=_ASK_TIMEOUT_SECONDS)
             except FutureTimeoutError:
+                self._timeouts_total += 1
+                logger.warning(
+                    "ask timeout | {}s exceeded, executor may be wedged | query={!r}",
+                    int(_ASK_TIMEOUT_SECONDS), normalized[:80],
+                )
                 final = {
                     "messages": [
                         {"role": "user", "content": query},
                         {
                             "role": "assistant",
                             "content": (
-                                "本轮处理超时（超过 120 秒安全上限），已终止。"
-                                "请尝试更明确的问题表述（公司名 + 年份 + 指标）后重试。"
+                                f"本轮处理超时（超过 {int(_ASK_TIMEOUT_SECONDS)} 秒安全上限），"
+                                "已终止。请尝试更明确的问题表述（公司名 + 年份 + 指标）后重试。"
                             ),
                         },
                     ]
@@ -222,8 +261,23 @@ class VeriFinService:
         finally:
             self._ask_gate.release()
 
-    def _run(self, query: str, thread_id: str) -> dict:
-        return AgentRunner(self.graph).run(query, thread_id=thread_id)
+    def _run(
+        self,
+        query: str,
+        thread_id: str,
+        started: Optional[threading.Event] = None,
+        abandoned: Optional[threading.Event] = None,
+    ) -> dict:
+        """执行器内跑一轮图（``started`` 在真正进入工作线程时置位）。"""
+        if started is not None:
+            started.set()
+        if abandoned is not None and abandoned.is_set():
+            return {}  # 调用方已返回 503，不必再跑一轮
+        token = ToolRegistry.activate(self._registry)
+        try:
+            return AgentRunner(self.graph).run(query, thread_id=thread_id)
+        finally:
+            ToolRegistry.restore(token)
 
     @property
     def session_count(self) -> int:
@@ -236,6 +290,12 @@ class VeriFinService:
         """累计新建会话数（含已被 LRU 逐出的）。"""
         with self._lock:
             return self._sessions_total
+
+    @property
+    def timeouts_total(self) -> int:
+        """累计执行超时次数（执行器卡死的可观测信号）。"""
+        with self._lock:
+            return self._timeouts_total
 
     # ------------------------------------------------------------------
 
@@ -263,11 +323,16 @@ class VeriFinService:
         evidence: List[dict] = []
         seen_chunks = set()
         verdict = ""
+        conflict_summary: Dict[str, Any] = {}
         for flag in (final.get("verify_flags") or {}).values():
             if not isinstance(flag, dict):
                 continue
             if flag.get("decision"):
                 verdict = str(flag.get("decision"))
+            conflict = flag.get("conflict") if isinstance(flag.get("conflict"), dict) else {}
+            if conflict_summary == {} and conflict.get("values"):
+                conflict_summary = conflict
+            adopted_value = conflict.get("reconciled_value")
             for result in flag.get("results") or []:
                 if not isinstance(result, dict):
                     continue
@@ -279,6 +344,16 @@ class VeriFinService:
                     continue
                 seen_chunks.add(chunk_id)
                 meta = chunk_meta.get(str(chunk_id), {})
+                status, reason = "accepted", None
+                if not result.get("passed"):
+                    status, reason = "excluded", "verify_failed"
+                elif (
+                    adopted_value is not None
+                    and result.get("value") is not None
+                    and round(float(result["value"]), 6) != round(float(adopted_value), 6)
+                ):
+                    # 通过了四要素校验，但仲裁没采纳它的值（如新闻稿初步口径）
+                    status, reason = "excluded", "conflict_not_adopted"
                 evidence.append({
                     "chunk_id": chunk_id,
                     "doc_id": meta.get("doc_id"),
@@ -288,7 +363,8 @@ class VeriFinService:
                     "unit": result.get("unit"),
                     "period": result.get("period"),
                     # 徽章跟随后端裁决：通过校验 = 采用，否则 = 排除展示
-                    "status": "accepted" if result.get("passed") else "excluded",
+                    "status": status,
+                    "reason": reason,
                 })
 
         hooks = final.get("hooks") or []
@@ -310,6 +386,7 @@ class VeriFinService:
             "verdict": verdict or ("VERIFIED" if evidence else "REJECT"),
             "answer": answer,
             "calculation": final.get("calculation_result") or {},
+            "conflict": conflict_summary,
             "evidence": evidence[:8],
             "trajectory": trajectory,
             "dialog_state": dialog_state,
@@ -347,17 +424,21 @@ def create_app(
             # 当前跟踪中的会话数（LRU 上限内）与累计新建会话数
             "sessions": svc.session_count,
             "sessions_total": svc.sessions_total,
+            # 执行器可观测性：卡死时这里会先涨 timeouts_total
+            "timeouts_total": svc.timeouts_total,
         }
 
     @app.post("/ask", response_model=AskResponse)
-    def ask(payload: AskRequest) -> JSONResponse:
+    def ask(payload: AskRequest) -> dict:
         if not payload.query.strip():
             raise HTTPException(status_code=422, detail="query 不能为空")
         try:
             result = svc.ask(payload.query, payload.conversation_id)
         except ServiceBusyError as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
-        return JSONResponse(result)
+        # 返回 dict 交给 response_model 校验/序列化：JSONResponse 会绕过
+        # 校验，导致 OpenAPI 文档与实际字段（verdict/conflict）不一致。
+        return result
 
     @app.get("/")
     def index():
