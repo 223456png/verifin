@@ -10,9 +10,9 @@ from pathlib import Path
 
 ROOT = Path("/home/z/my-project/repos/verifin")
 RUNS = {
-    "rule（基线）": ROOT / "results_v122_norank",
-    "L1 llm=both": ROOT / "results_llm_both",
-    "L2 llm=programmer": ROOT / "results_llm_prog",
+    "rule（基线）": ROOT / "results/v122_norank",
+    "L1 llm=both": ROOT / "results/llm_both",
+    "L2 llm=programmer": ROOT / "results/llm_prog",
 }
 
 def load_run(d: Path):

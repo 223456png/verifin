@@ -9,7 +9,7 @@
 - 聚合 faithfulness 率 / 平均 relevancy，落盘 llm_judge.json + 报告。
 
 用法：
-  python scripts/llm_judge.py --run-dir results_llm_prog --index-dir ./bge_env \
+  python scripts/llm_judge.py --run-dir results/llm_prog --index-dir ./bge_env \
       [--api-key sk-xxx | --bridge http://127.0.0.1:8642] [--limit 50]
 """
 

@@ -50,10 +50,14 @@ data/finqa/*
 Thumbs.db
 
 # 消融结果目录：只入库 report.md 与 LLM 调用/评审摘要；full/ 逐样本产物不入库
-results_*/*
-!results_*/report.md
-!results_*/llm_calls_*.json
-!results_*/llm_judge.json
+results/v*/*
+!results/v*/report.md
+!results/v*/llm_calls_*.json
+!results/v*/llm_judge.json
+results/llm_*/*
+!results/llm_*/report.md
+!results/llm_*/llm_calls_*.json
+!results/llm_*/llm_judge.json
 
 # 学习练习文件（W2 模式，非项目资产）
 tests/test_w2_night3_practice.py

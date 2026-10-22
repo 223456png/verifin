@@ -164,12 +164,12 @@ LLM 是可插拔的：planner 和程序生成都走同一个 `complete(prompt) -
 | FinQA EM 7.0%（Phase 10）/ PoT 子集 38 题 | CHANGELOG「Phase 10」条目 | 沙箱产物未保留 |
 | ratio 理想检索 2/13→7/13（Phase 10.1） | `scripts/verify_ratio_ideal.py` | 脚本入库 |
 | FinQA EM 8.0% / doc recall 88.0%（Phase 11） | CHANGELOG「Phase 11」条目 + `scripts/diagnose_recall.py` + `scripts/trace_gold_loss.py` | 沙箱产物未保留，诊断脚本入库 |
-| FinQA EM 21.0%（Phase 12.2）/ 六族未检出 122→9 | `results_v122_norank/report.md` + `scripts/repro_regressions.py` | **报告已入库** |
-| FinQA EM 29.0%（Phase 12.3，LLM 程序生成） | `results_llm_prog/report.md` + `llm_calls_programmer.json` + `llm_judge.json` | **已入库** |
-| LLM planner 消融 24.0%（Phase 12.3） | `results_llm_both/report.md` + planner/programmer 调用日志 | **已入库** |
-| FinQA EM 30.0%（Phase 12.5，实体门控） | `results_v125/report.md` | **报告已入库** |
-| Phase 12.5b 负向结果 29.0% | `results_v126/report.md` + `llm_calls_entity_link.json` | **已入库** |
-| Structured Outputs 消融 31.0%（Phase 13.1） | `results_v13_js/report.md` + `llm_calls_programmer.json` | **已入库** |
+| FinQA EM 21.0%（Phase 12.2）/ 六族未检出 122→9 | `results/v122_norank/report.md` + `scripts/repro_regressions.py` | **报告已入库** |
+| FinQA EM 29.0%（Phase 12.3，LLM 程序生成） | `results/llm_prog/report.md` + `llm_calls_programmer.json` + `llm_judge.json` | **已入库** |
+| LLM planner 消融 24.0%（Phase 12.3） | `results/llm_both/report.md` + planner/programmer 调用日志 | **已入库** |
+| FinQA EM 30.0%（Phase 12.5，实体门控） | `results/v125/report.md` | **报告已入库** |
+| Phase 12.5b 负向结果 29.0% | `results/v126/report.md` + `llm_calls_entity_link.json` | **已入库** |
+| Structured Outputs 消融 31.0%（Phase 13.1） | `results/v13_js/report.md` + `llm_calls_programmer.json` | **已入库** |
 | 无 LLM 降级基线 22.0%（key 失效轮的副产物） | CHANGELOG「Phase 13.1」条目 | 佐证降级架构：LLM 全挂时 EM 回到规则基线水平 |
 | 3/3 回归样本修复（Phase 12.2） | `results/repro_regressions/` | **已入库** |
 | ConvFinQA recall 65% | CHANGELOG「ConvFinQA」条目 | 沙箱产物未保留 |

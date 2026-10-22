@@ -119,7 +119,7 @@ python scripts/build_index.py --dataset finqa --data-dir ./data/finqa \
 复现文章里 EM 29.0% 那一版（Phase 12.3，LLM 程序生成）还需要 LLM key 和对应开关：
 
 ```bash
-python scripts/run_benchmark.py --dataset finqa --max-samples 100 --output ./results_llm_repro \
+python scripts/run_benchmark.py --dataset finqa --max-samples 100 --output ./results/llm_repro \
   --llm-api-key $DEEPSEEK_API_KEY --llm-mode programmer
 ```
 
