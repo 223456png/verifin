@@ -4,511 +4,1676 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>VeriFin · 金融证据校验智能体</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%8D%3C/text%3E%3C/svg%3E">
+<meta name="description" content="VeriFin 是一个证据优先的金融问答智能体：每个数字都经过检索、四要素校验与程序化计算，执行轨迹全程可查。">
+<meta name="color-scheme" content="dark">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%230a0e13'/%3E%3Cpath d='M50 18l26 11v22c0 15-11 27-26 32-15-5-26-17-26-32V29l26-11z' fill='none' stroke='%234f8dff' stroke-width='6'/%3E%3Cpath d='M38 50l9 9 16-18' fill='none' stroke='%233ddc97' stroke-width='7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <style>
-:root {
-  --ink: #0d110f;
-  --panel: #141916;
-  --panel-2: #1a201c;
-  --hairline: #2b332d;
-  --hairline-soft: #222924;
-  --paper: #e9e4d5;
-  --paper-dim: #b7b2a3;
-  --muted: #7d857c;
-  --gold: #c9a227;
-  --gold-soft: rgba(201, 162, 39, 0.14);
-  --emerald: #57b27a;
-  --emerald-soft: rgba(87, 178, 122, 0.12);
-  --crimson: #c0554d;
-  --crimson-soft: rgba(192, 85, 77, 0.12);
-  --serif: Georgia, "Noto Serif SC", "Source Han Serif SC", "Songti SC", "SimSun", serif;
-  --mono: Consolas, "Noto Sans Mono", Menlo, monospace;
-}
-* { margin: 0; padding: 0; box-sizing: border-box; }
-html { scroll-behavior: smooth; }
-body {
-  background: var(--ink);
-  color: var(--paper);
-  font-family: var(--mono);
-  font-size: 14px;
-  line-height: 1.65;
-  min-height: 100vh;
-  background-image:
-    repeating-linear-gradient(0deg, transparent 0 31px, var(--hairline-soft) 31px 32px),
-    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(201,162,39,0.05), transparent);
-  letter-spacing: 0.01em;
-}
-::selection { background: var(--gold); color: var(--ink); }
+  /* ============================================================
+     Design tokens
+     8px spacing scale · 12px radii · two surface levels · 1px hairlines
+     ============================================================ */
+  :root {
+    --bg: #0a0e13;
+    --surface: #10161e;
+    --surface-2: #151d27;
+    --surface-3: #1a2430;
+    --line: #1e2a38;
+    --line-soft: #18222d;
 
-/* ============ 顶栏 ============ */
-header {
-  display: flex; align-items: baseline; gap: 20px;
-  padding: 26px 40px 18px;
-  border-bottom: 1px solid var(--hairline);
-  position: sticky; top: 0; backdrop-filter: blur(8px);
-  background: rgba(13, 17, 15, 0.88); z-index: 10;
-}
-.wordmark {
-  font-family: var(--serif); font-weight: 600; font-size: 26px;
-  letter-spacing: -0.01em; display: flex; align-items: baseline; gap: 10px;
-}
-.wordmark .fin { color: var(--gold); font-style: italic; font-weight: 300; }
-.tagline { color: var(--muted); font-size: 12px; }
-.status {
-  margin-left: auto; display: flex; align-items: center; gap: 10px;
-  font-size: 11px; color: var(--paper-dim);
-}
-.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
-.dot.ok { background: var(--emerald); box-shadow: 0 0 8px var(--emerald); animation: pulse 2.4s infinite; }
-.dot.err { background: var(--crimson); }
-@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+    --text: #e8eef6;
+    --text-2: #a6b5c6;
+    --text-3: #74879c;
 
-/* ============ 布局 ============ */
-main {
-  display: grid; grid-template-columns: minmax(0, 1fr) 300px;
-  gap: 0; max-width: 1240px; margin: 0 auto;
-  min-height: calc(100vh - 200px);
-}
-@media (max-width: 900px) { main { grid-template-columns: 1fr; } aside { display: none; } }
+    --accent: #4f8dff;
+    --accent-hi: #79aaff;
+    --accent-soft: rgba(79, 141, 255, 0.12);
+    --accent-line: rgba(79, 141, 255, 0.32);
 
-/* ============ 对话区 ============ */
-.thread { padding: 34px 40px 180px; display: flex; flex-direction: column; gap: 30px; }
-.hero { margin-bottom: 6px; }
-.hero h1 {
-  font-family: var(--serif); font-weight: 300; font-size: clamp(28px, 4vw, 42px);
-  line-height: 1.25; letter-spacing: -0.015em; max-width: 560px;
-}
-.hero h1 em { color: var(--gold); font-style: italic; }
-.hero p { color: var(--muted); margin-top: 12px; max-width: 520px; font-size: 13px; }
+    --pass: #3ddc97;
+    --pass-soft: rgba(61, 220, 151, 0.1);
+    --pass-line: rgba(61, 220, 151, 0.28);
 
-.turn { display: flex; flex-direction: column; gap: 14px; animation: rise 0.5s ease both; }
-@keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+    --fail: #ff8b8b;
+    --fail-soft: rgba(255, 139, 139, 0.1);
+    --fail-line: rgba(255, 139, 139, 0.28);
 
-.q { align-self: flex-end; max-width: 78%; text-align: right; }
-.q .bubble {
-  display: inline-block; background: var(--panel-2); border: 1px solid var(--hairline);
-  padding: 10px 16px; border-radius: 10px 10px 2px 10px; font-size: 14px;
-}
-.q .who { font-size: 10px; color: var(--muted); margin-bottom: 5px; letter-spacing: 0.12em; text-transform: uppercase; }
+    --r-sm: 8px;
+    --r-md: 12px;
+    --r-lg: 16px;
 
-.a { max-width: 92%; }
-.a .who { font-size: 10px; color: var(--gold); margin-bottom: 5px; letter-spacing: 0.12em; text-transform: uppercase; }
-.answer {
-  font-family: var(--serif); font-size: 17px; font-weight: 300; line-height: 1.6;
-  border-left: 2px solid var(--gold); padding-left: 16px;
-}
+    --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+            "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
+    --serif: Georgia, "Noto Serif SC", "Songti SC", "SimSun", serif;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
 
-/* 轨迹步进器 */
-.traj { display: flex; flex-wrap: wrap; gap: 0; align-items: center; margin-top: 2px; }
-.traj .step {
-  display: flex; align-items: center; gap: 0;
-  opacity: 0; animation: stepIn 0.35s ease both;
-}
-@keyframes stepIn { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: none; } }
-.traj .node {
-  font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase;
-  border: 1px solid var(--hairline); border-radius: 20px; padding: 3px 11px;
-  color: var(--paper-dim); background: var(--panel);
-}
-.traj .node.calc { border-color: var(--gold); color: var(--gold); background: var(--gold-soft); }
-.traj .node.verifier { border-color: var(--emerald); color: var(--emerald); }
-.traj .node.replanner { border-color: var(--crimson); color: var(--crimson); }
-.traj .arrow { color: var(--hairline); padding: 0 7px; font-size: 11px; }
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.32);
+    --shadow-2: 0 8px 24px rgba(0, 0, 0, 0.28);
+  }
 
-/* 证据卡 */
-.evidence { display: grid; gap: 8px; margin-top: 4px; }
-.ev {
-  display: grid; grid-template-columns: auto 1fr auto; gap: 14px; align-items: baseline;
-  background: var(--panel); border: 1px solid var(--hairline-soft);
-  padding: 12px 16px; border-radius: 6px;
-  transition: border-color 0.25s, transform 0.25s;
-}
-.ev:hover { border-color: var(--hairline); transform: translateX(3px); }
-.ev .idx { font-size: 10px; color: var(--gold); letter-spacing: 0.1em; }
-.ev .content { font-size: 12.5px; color: var(--paper-dim); line-height: 1.55; }
-.ev .content b { color: var(--paper); font-weight: 500; }
-.ev .val { font-size: 13px; color: var(--emerald); white-space: nowrap; text-align: right; }
-.ev .badge {
-  display: inline-block; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase;
-  color: var(--emerald); background: var(--emerald-soft);
-  border: 1px solid rgba(87,178,122,0.3); border-radius: 3px; padding: 1px 7px; margin-bottom: 6px;
-}
-.ev .badge.excluded { color: var(--muted); background: transparent; border-color: var(--hairline); }
-.ev.excluded .val { color: var(--muted); }
-.ev .meta { font-size: 10.5px; color: var(--muted); margin-top: 4px; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
 
-/* 计算面板 */
-.calc {
-  margin-top: 4px; background: var(--gold-soft); border: 1px solid rgba(201,162,39,0.3);
-  border-radius: 6px; padding: 14px 18px;
-}
-.calc .label { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--gold); margin-bottom: 8px; }
-.calc .alts { margin-top: 10px; padding-top: 8px; border-top: 1px dashed rgba(201,162,39,0.3); }
-.calc .alt-label { font-size: 9.5px; letter-spacing: 0.12em; color: var(--muted); margin-bottom: 5px; }
-.calc .alt-row { display: flex; justify-content: space-between; gap: 12px; font-size: 11.5px; padding: 2px 0; }
-.calc .alt-val { color: var(--paper-dim); font-family: var(--mono); }
-.calc .alt-src { color: var(--muted); font-size: 10.5px; }
-.calc .expr { font-size: 15px; color: var(--paper); margin-bottom: 10px; word-break: break-all; }
-.calc .scales { display: flex; flex-wrap: wrap; gap: 22px; }
-.calc .scale .k { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; }
-.calc .scale .v { font-size: 16px; color: var(--gold); font-weight: 500; }
+  html { -webkit-text-size-adjust: 100%; height: 100%; }
 
-/* 偏好记忆 chips */
-.prefs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
-.pref {
-  font-size: 10.5px; color: var(--paper-dim); border: 1px dashed var(--hairline);
-  border-radius: 14px; padding: 2px 10px;
-}
-.pref b { color: var(--gold); font-weight: 400; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.6;
+    font-feature-settings: "cv02", "cv03", "cv04", "tnum";
+    -webkit-font-smoothing: antialiased;
+    height: 100vh;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
 
-/* ============ 侧栏 ============ */
-aside {
-  border-left: 1px solid var(--hairline); padding: 34px 28px 60px;
-  display: flex; flex-direction: column; gap: 28px;
-}
-aside h3 {
-  font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase;
-  color: var(--muted); font-weight: 400; padding-bottom: 10px;
-  border-bottom: 1px solid var(--hairline-soft);
-}
-.example { display: flex; flex-direction: column; gap: 8px; }
-.ex-btn {
-  text-align: left; background: none; border: 1px solid var(--hairline-soft);
-  color: var(--paper-dim); font-family: var(--mono); font-size: 12px;
-  padding: 10px 14px; border-radius: 6px; cursor: pointer; line-height: 1.5;
-  transition: all 0.2s;
-}
-.ex-btn:hover { border-color: var(--gold); color: var(--paper); background: var(--gold-soft); transform: translateX(2px); }
-.ex-btn .tag { display: block; font-size: 9.5px; color: var(--gold); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 3px; }
-.session .row { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--paper-dim); padding: 4px 0; }
-.session .row b { color: var(--paper); font-weight: 400; }
-.new-conv {
-  margin-top: 10px; width: 100%; background: none; border: 1px solid var(--hairline);
-  color: var(--paper-dim); font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em;
-  padding: 8px; border-radius: 5px; cursor: pointer; text-transform: uppercase;
-  transition: all 0.2s;
-}
-.new-conv:hover { border-color: var(--crimson); color: var(--crimson); }
+  ::selection { background: var(--accent); color: #06101f; }
 
-/* ============ 输入区 ============ */
-.dock {
-  position: fixed; bottom: 0; left: 0; right: 0;
-  background: linear-gradient(transparent, var(--ink) 30%);
-  padding: 30px 0 26px; z-index: 5;
-}
-.dock-inner { max-width: 1240px; margin: 0 auto; padding: 0 40px; position: relative; }
-.composer { position: relative; }
-#input {
-  width: 100%; background: var(--panel-2); border: 1px solid var(--hairline);
-  border-radius: 10px; color: var(--paper); font-family: var(--mono); font-size: 14.5px;
-  padding: 15px 118px 15px 18px; outline: none; resize: none;
-  transition: border-color 0.25s, box-shadow 0.25s;
-}
-#input:focus { border-color: var(--gold); box-shadow: 0 0 0 3px rgba(201,162,39,0.08); }
-#send {
-  position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
-  background: var(--gold); color: var(--ink); border: none; border-radius: 7px;
-  font-family: var(--mono); font-size: 12px; font-weight: 500; letter-spacing: 0.08em;
-  padding: 9px 18px; cursor: pointer; text-transform: uppercase; transition: all 0.2s;
-}
-#send:hover { transform: translateY(-50%) translateY(-1px); box-shadow: 0 4px 16px rgba(201,162,39,0.35); }
-#send:disabled { opacity: 0.45; cursor: default; box-shadow: none; }
-.hint { font-size: 10.5px; color: var(--muted); margin-top: 8px; text-align: right; }
+  :focus-visible {
+    outline: 2px solid var(--accent-hi);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
 
-/* loading */
-.thinking { display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 12px; }
-.thinking .bar { display: inline-flex; gap: 4px; }
-.thinking .bar i {
-  width: 4px; height: 14px; background: var(--gold); opacity: 0.25;
-  animation: eq 1s infinite; border-radius: 1px;
-}
-.thinking .bar i:nth-child(2) { animation-delay: 0.15s; }
-.thinking .bar i:nth-child(3) { animation-delay: 0.3s; }
-.thinking .bar i:nth-child(4) { animation-delay: 0.45s; }
-@keyframes eq { 0%,100% { transform: scaleY(0.4); opacity: 0.3; } 50% { transform: scaleY(1); opacity: 1; } }
+  [hidden] { display: none !important; }
 
-.error {
-  background: var(--crimson-soft); border: 1px solid rgba(192,85,77,0.35);
-  color: var(--crimson); border-radius: 6px; padding: 10px 14px; font-size: 12.5px;
-}
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
+
+  .skip {
+    position: absolute; left: -9999px; top: 8px; z-index: 50;
+    background: var(--surface-3); color: var(--text);
+    padding: 8px 14px; border-radius: var(--r-sm); border: 1px solid var(--line);
+  }
+  .skip:focus { left: 16px; }
+
+  /* ============================================================
+     App bar
+     ============================================================ */
+  .appbar {
+    flex: 0 0 auto;
+    border-bottom: 1px solid var(--line);
+    background: rgba(10, 14, 19, 0.92);
+    backdrop-filter: blur(12px);
+    z-index: 20;
+  }
+
+  .appbar-inner {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 24px;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+
+  .mark {
+    width: 32px; height: 32px; flex: 0 0 32px;
+    display: grid; place-items: center;
+    border-radius: 10px;
+    background: var(--accent-soft);
+    border: 1px solid var(--accent-line);
+    color: var(--accent-hi);
+  }
+
+  .brand-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+
+  .wordmark {
+    font-family: var(--serif);
+    font-size: 21px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    line-height: 1.15;
+    color: var(--text);
+  }
+  .wordmark .wm-accent { color: var(--accent-hi); }
+
+  .tagline {
+    font-size: 12px;
+    color: var(--text-3);
+    line-height: 1.4;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .appbar-meta {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .chip {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-3);
+    border: 1px solid var(--line-soft);
+    background: var(--surface);
+    border-radius: 999px;
+    padding: 4px 10px;
+    white-space: nowrap;
+  }
+
+  .status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--line-soft);
+    background: var(--surface);
+    font-size: 12px;
+    color: var(--text-2);
+    white-space: nowrap;
+  }
+
+  .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--text-3);
+    flex: 0 0 7px;
+  }
+  .dot.ok {
+    background: var(--pass);
+    box-shadow: 0 0 0 3px rgba(61, 220, 151, 0.14);
+    animation: pulse 2.8s ease-in-out infinite;
+  }
+  .dot.err {
+    background: var(--fail);
+    box-shadow: 0 0 0 3px rgba(255, 139, 139, 0.14);
+  }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+
+  /* ============================================================
+     Layout
+     ============================================================ */
+  main {
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    max-width: 1200px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 320px;
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .chat {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    border-right: 1px solid var(--line-soft);
+  }
+
+  /* ============================================================
+     Conversation thread
+     ============================================================ */
+  .thread {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 28px 32px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    scroll-behavior: smooth;
+    overscroll-behavior: contain;
+  }
+  .thread::-webkit-scrollbar { width: 10px; }
+  .thread::-webkit-scrollbar-track { background: transparent; }
+  .thread::-webkit-scrollbar-thumb {
+    background: var(--surface-3);
+    border-radius: 999px;
+    border: 3px solid var(--bg);
+  }
+  .thread::-webkit-scrollbar-thumb:hover { background: #26364a; }
+
+  /* ---------- Empty state ---------- */
+  .empty {
+    margin: auto 0;
+    padding: 16px 0 12px;
+    max-width: 700px;
+    animation: rise 0.45s ease both;
+  }
+
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent-hi);
+    margin-bottom: 16px;
+  }
+  .eyebrow::before {
+    content: "";
+    width: 18px; height: 1px;
+    background: var(--accent-line);
+  }
+
+  .empty h2 {
+    font-size: clamp(26px, 3.2vw, 36px);
+    font-weight: 650;
+    line-height: 1.28;
+    letter-spacing: -0.02em;
+    color: var(--text);
+  }
+  .empty h2 em {
+    font-style: normal;
+    color: var(--accent-hi);
+  }
+
+  .lede {
+    margin-top: 14px;
+    max-width: 560px;
+    font-size: 14px;
+    line-height: 1.75;
+    color: var(--text-3);
+  }
+
+  .examples {
+    margin-top: 28px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .ex-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    text-align: left;
+    font-family: inherit;
+    font-size: 13.5px;
+    line-height: 1.55;
+    color: var(--text-2);
+    background: var(--surface);
+    border: 1px solid var(--line-soft);
+    border-radius: var(--r-md);
+    padding: 14px 16px;
+    cursor: pointer;
+    position: relative;
+    transition: border-color 0.18s ease, background-color 0.18s ease,
+                color 0.18s ease, transform 0.18s ease;
+  }
+  .ex-btn:hover {
+    border-color: var(--accent-line);
+    background: var(--surface-2);
+    color: var(--text);
+    transform: translateY(-1px);
+  }
+  .ex-btn:active { transform: translateY(0); }
+
+  .ex-tag {
+    font-size: 10.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-3);
+    font-weight: 500;
+    transition: color 0.18s ease;
+  }
+  .ex-btn:hover .ex-tag { color: var(--accent-hi); }
+
+  .ex-q { display: block; }
+
+  .ex-go {
+    position: absolute;
+    right: 14px; bottom: 12px;
+    font-size: 13px;
+    color: var(--text-3);
+    opacity: 0;
+    transform: translateX(-4px);
+    transition: opacity 0.18s ease, transform 0.18s ease, color 0.18s ease;
+  }
+  .ex-btn:hover .ex-go { opacity: 1; transform: none; color: var(--accent-hi); }
+
+  .capabilities {
+    margin-top: 28px;
+    padding-top: 18px;
+    border-top: 1px solid var(--line-soft);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 20px;
+    list-style: none;
+  }
+  .capabilities li {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12px;
+    color: var(--text-3);
+  }
+  .capabilities li::before {
+    content: "";
+    width: 4px; height: 4px;
+    border-radius: 50%;
+    background: var(--pass);
+    opacity: 0.8;
+  }
+
+  /* ---------- Turn ---------- */
+  .turn {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    animation: rise 0.4s ease both;
+  }
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: none; }
+  }
+
+  .q {
+    display: flex;
+    justify-content: flex-end;
+  }
+  .q-bubble {
+    max-width: 74%;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 14px 14px 4px 14px;
+    padding: 11px 15px;
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--text);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  /* ---------- Answer card ---------- */
+  .answer-card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--r-lg);
+    padding: 18px 20px 20px;
+    box-shadow: var(--shadow-1);
+  }
+
+  .ans-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .avatar {
+    width: 26px; height: 26px;
+    flex: 0 0 26px;
+    display: grid; place-items: center;
+    border-radius: 8px;
+    background: var(--accent-soft);
+    border: 1px solid var(--accent-line);
+    color: var(--accent-hi);
+    font-family: var(--serif);
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .ans-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    letter-spacing: 0.01em;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    border-radius: 999px;
+    padding: 3px 9px;
+    border: 1px solid transparent;
+    white-space: nowrap;
+  }
+  .badge::before {
+    content: "";
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+  .badge.ok {
+    color: var(--pass);
+    background: var(--pass-soft);
+    border-color: var(--pass-line);
+  }
+  .badge.accent {
+    color: var(--accent-hi);
+    background: var(--accent-soft);
+    border-color: var(--accent-line);
+  }
+  .badge.warn {
+    color: var(--text-2);
+    background: var(--surface-2);
+    border-color: var(--line);
+  }
+  .badge.reject {
+    color: var(--fail);
+    background: var(--fail-soft);
+    border-color: var(--fail-line);
+  }
+
+  .ans-head .spacer { flex: 1 1 auto; }
+
+  .ans-time {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-3);
+  }
+
+  .metric {
+    margin-top: 16px;
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .metric-num {
+    font-size: clamp(30px, 3.4vw, 40px);
+    font-weight: 650;
+    letter-spacing: -0.03em;
+    line-height: 1.05;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+  .metric-label {
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-3);
+  }
+
+  .answer {
+    margin-top: 14px;
+    font-size: 14.5px;
+    line-height: 1.8;
+    color: #d9e4f0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .ans-foot {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--line-soft);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 16px;
+    font-size: 12px;
+    color: var(--text-3);
+  }
+  .ans-foot b { color: var(--text-2); font-weight: 500; }
+
+  /* ---------- Blocks (trajectory / evidence / calc) ---------- */
+  .block {
+    border: 1px solid var(--line-soft);
+    background: var(--surface);
+    border-radius: var(--r-md);
+    padding: 14px 16px 16px;
+  }
+
+  .block-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .block-head h3 {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--text-2);
+  }
+  .block-head .block-meta {
+    margin-left: auto;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-3);
+    white-space: nowrap;
+  }
+
+  /* ---------- Trajectory stepper ---------- */
+  .stepper {
+    display: flex;
+    align-items: center;
+    list-style: none;
+    overflow-x: auto;
+    padding: 2px 2px 6px;
+    scrollbar-width: none;
+  }
+  .stepper::-webkit-scrollbar { height: 0; }
+
+  .step {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 0 0 auto;
+    opacity: 0;
+    animation: stepIn 0.34s ease both;
+  }
+  @keyframes stepIn {
+    from { opacity: 0; transform: translateX(-5px); }
+    to { opacity: 1; transform: none; }
+  }
+
+  .step .pt {
+    width: 9px; height: 9px;
+    flex: 0 0 9px;
+    border-radius: 50%;
+    background: var(--text-3);
+    box-shadow: 0 0 0 3px rgba(116, 135, 156, 0.12);
+  }
+
+  .step .tx { display: flex; flex-direction: column; line-height: 1.25; }
+  .step .lb { font-size: 12px; font-weight: 500; color: var(--text-2); white-space: nowrap; }
+  .step .en {
+    font-family: var(--mono);
+    font-size: 9.5px;
+    letter-spacing: 0.08em;
+    color: var(--text-3);
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .step:not(:last-child)::after {
+    content: "";
+    width: 22px;
+    height: 1px;
+    background: var(--line);
+    margin: 0 10px;
+    flex: 0 0 22px;
+  }
+
+  .step.verifier .pt { background: var(--pass); box-shadow: 0 0 0 3px rgba(61, 220, 151, 0.14); }
+  .step.verifier .lb { color: var(--pass); }
+  .step.calculator .pt,
+  .step.pot_executor .pt,
+  .step.calc .pt { background: var(--accent); box-shadow: 0 0 0 3px rgba(79, 141, 255, 0.16); }
+  .step.calculator .lb,
+  .step.pot_executor .lb,
+  .step.calc .lb { color: var(--accent-hi); }
+  .step.replanner .pt { background: var(--fail); box-shadow: 0 0 0 3px rgba(255, 139, 139, 0.14); }
+  .step.replanner .lb { color: var(--fail); }
+
+  /* ---------- Evidence grid ---------- */
+  .ev-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .ev {
+    background: var(--surface-2);
+    border: 1px solid var(--line-soft);
+    border-radius: var(--r-sm);
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+    transition: border-color 0.18s ease, background-color 0.18s ease;
+  }
+  .ev:hover { border-color: var(--line); }
+
+  .ev.excluded {
+    background: transparent;
+    border-style: dashed;
+  }
+
+  .ev-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .ev-idx {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--text-3);
+    letter-spacing: 0.04em;
+  }
+
+  .ev-text {
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: var(--text-2);
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .ev.excluded .ev-text { color: var(--text-3); }
+
+  .ev-foot {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    padding-top: 8px;
+    border-top: 1px solid var(--line-soft);
+  }
+  .ev-src {
+    font-size: 11px;
+    color: var(--text-3);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+  .ev-val {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--accent-hi);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  .ev.excluded .ev-val { color: var(--text-3); }
+
+  /* ---------- PoT calc ---------- */
+  .code {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.7;
+    color: #cfe0f5;
+    background: #0b1119;
+    border: 1px solid var(--line-soft);
+    border-radius: var(--r-sm);
+    padding: 12px 14px;
+    overflow-x: auto;
+    white-space: pre;
+    word-break: normal;
+  }
+  .code.err { color: var(--fail); }
+
+  .metrics {
+    margin-top: 10px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .metric-cell {
+    flex: 1 1 120px;
+    background: var(--surface-2);
+    border: 1px solid var(--line-soft);
+    border-radius: var(--r-sm);
+    padding: 9px 12px;
+  }
+  .metric-cell .k {
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-3);
+  }
+  .metric-cell .v {
+    margin-top: 2px;
+    font-family: var(--mono);
+    font-size: 15px;
+    color: var(--accent-hi);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .alts {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--line);
+  }
+  .alt-label {
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-3);
+    margin-bottom: 6px;
+  }
+  .alt-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 12px;
+    padding: 3px 0;
+  }
+  .alt-val { font-family: var(--mono); color: var(--text-2); }
+  .alt-src { font-family: var(--mono); font-size: 11px; color: var(--text-3); text-align: right; }
+
+  /* ---------- Preference chips ---------- */
+  .prefs {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+  }
+  .prefs-label {
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-3);
+    margin-right: 2px;
+  }
+  .pref {
+    font-size: 11.5px;
+    color: var(--text-2);
+    background: var(--surface-2);
+    border: 1px solid var(--line-soft);
+    border-radius: 999px;
+    padding: 3px 10px;
+  }
+  .pref b { color: var(--accent-hi); font-weight: 500; }
+
+  /* ---------- Thinking / error ---------- */
+  .thinking {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--surface);
+    border: 1px solid var(--line-soft);
+    border-radius: var(--r-md);
+    padding: 14px 16px;
+    font-size: 12.5px;
+    color: var(--text-3);
+    max-width: 360px;
+  }
+  .thinking .bar { display: inline-flex; gap: 3px; align-items: flex-end; height: 14px; }
+  .thinking .bar i {
+    width: 3px; height: 12px;
+    background: var(--accent);
+    opacity: 0.3;
+    border-radius: 1px;
+    animation: eq 1s ease-in-out infinite;
+  }
+  .thinking .bar i:nth-child(2) { animation-delay: 0.14s; }
+  .thinking .bar i:nth-child(3) { animation-delay: 0.28s; }
+  .thinking .bar i:nth-child(4) { animation-delay: 0.42s; }
+  @keyframes eq {
+    0%, 100% { transform: scaleY(0.35); opacity: 0.3; }
+    50% { transform: scaleY(1); opacity: 1; }
+  }
+
+  .error {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    background: var(--fail-soft);
+    border: 1px solid var(--fail-line);
+    border-radius: var(--r-md);
+    padding: 14px 16px;
+  }
+  .error .err-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--fail);
+  }
+  .error .err-body {
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: #f2c3c3;
+    overflow-wrap: anywhere;
+  }
+
+  /* ============================================================
+     Composer dock
+     ============================================================ */
+  .dock {
+    flex: 0 0 auto;
+    padding: 12px 32px 18px;
+    background: linear-gradient(180deg, rgba(10, 14, 19, 0) 0%, var(--bg) 22%);
+  }
+
+  .composer {
+    position: relative;
+  }
+
+  #input {
+    width: 100%;
+    min-height: 56px;
+    max-height: 168px;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 14.5px;
+    line-height: 1.5;
+    padding: 18px 112px 18px 18px;
+    outline: none;
+    resize: none;
+    overflow-y: auto;
+    transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+  }
+  #input::placeholder { color: var(--text-3); }
+  #input:hover { border-color: #26364a; }
+  #input:focus {
+    border-color: var(--accent-line);
+    background: var(--surface-3);
+    box-shadow: 0 0 0 3px rgba(79, 141, 255, 0.1);
+  }
+
+  #send {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    height: 38px;
+    padding: 0 15px;
+    background: var(--accent);
+    color: #06101f;
+    border: none;
+    border-radius: 9px;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    cursor: pointer;
+    transition: background-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+  }
+  #send .ico { flex: 0 0 auto; }
+  #send .sp { display: none; }
+  #send:hover {
+    background: var(--accent-hi);
+    transform: translateY(-50%) translateY(-1px);
+    box-shadow: 0 6px 18px rgba(79, 141, 255, 0.28);
+  }
+  #send:active { transform: translateY(-50%); box-shadow: none; }
+  #send:disabled {
+    opacity: 0.55;
+    cursor: default;
+    box-shadow: none;
+    transform: translateY(-50%);
+  }
+  #send.is-loading .ico { display: none; }
+  #send.is-loading .sp {
+    display: block;
+    width: 12px; height: 12px;
+    border: 2px solid rgba(6, 16, 31, 0.35);
+    border-top-color: #06101f;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .hint {
+    margin-top: 8px;
+    padding-right: 2px;
+    font-size: 11px;
+    color: var(--text-3);
+    text-align: right;
+  }
+  .hint kbd {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--text-2);
+    background: var(--surface-2);
+    border: 1px solid var(--line-soft);
+    border-radius: 4px;
+    padding: 1px 5px;
+  }
+
+  /* ============================================================
+     Context sidebar
+     ============================================================ */
+  aside {
+    padding: 24px 20px 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    overflow-y: auto;
+    min-width: 0;
+    min-height: 0;
+  }
+  aside::-webkit-scrollbar { width: 8px; }
+  aside::-webkit-scrollbar-thumb {
+    background: var(--surface-3);
+    border-radius: 999px;
+    border: 2px solid var(--bg);
+  }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--line-soft);
+    border-radius: var(--r-md);
+    padding: 14px 16px 16px;
+  }
+
+  .panel-title {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-2);
+    margin-bottom: 10px;
+    letter-spacing: 0.01em;
+  }
+  .panel-title span {
+    font-family: var(--mono);
+    font-size: 9.5px;
+    font-weight: 400;
+    letter-spacing: 0.1em;
+    color: var(--text-3);
+    text-transform: uppercase;
+  }
+
+  .kv { display: flex; flex-direction: column; }
+  .kv-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 7px 0;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .kv-row:last-child { border-bottom: none; padding-bottom: 0; }
+  .kv-row:first-child { padding-top: 0; }
+  .kv-row dt {
+    flex: 0 0 auto;
+    font-size: 12px;
+    color: var(--text-3);
+  }
+  .kv-row dd {
+    font-size: 12.5px;
+    color: var(--text);
+    text-align: right;
+    overflow-wrap: anywhere;
+    min-width: 0;
+  }
+  .kv-row dd.mono { font-family: var(--mono); font-size: 12px; color: var(--text-2); }
+
+  .new-conv {
+    margin-top: 12px;
+    width: 100%;
+    padding: 9px 12px;
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    color: var(--text-2);
+    font-family: inherit;
+    font-size: 12.5px;
+    cursor: pointer;
+    transition: border-color 0.18s ease, color 0.18s ease, background-color 0.18s ease;
+  }
+  .new-conv:hover {
+    border-color: var(--accent-line);
+    color: var(--accent-hi);
+    background: var(--accent-soft);
+  }
+
+  .quick { display: flex; flex-direction: column; gap: 6px; }
+  .ex-btn.sm {
+    padding: 9px 12px;
+    font-size: 12.5px;
+    line-height: 1.45;
+    gap: 3px;
+    border-radius: 10px;
+    background: transparent;
+  }
+  .ex-btn.sm:hover { background: var(--surface-2); }
+  .ex-btn.sm .ex-tag { font-size: 9.5px; }
+  .ex-btn.sm .ex-go { display: none; }
+
+  .caps { list-style: none; display: flex; flex-direction: column; gap: 9px; }
+  .caps li { font-size: 11.5px; line-height: 1.55; color: var(--text-3); }
+  .caps b {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-2);
+    margin-bottom: 1px;
+  }
+
+  /* ============================================================
+     Responsive
+     ============================================================ */
+  @media (max-width: 1023px) {
+    body { height: auto; overflow: visible; }
+    .appbar { position: sticky; top: 0; }
+    main { display: block; max-width: none; }
+    .chat { border-right: none; min-height: calc(100vh - 60px); }
+    .thread { overflow: visible; padding: 24px 20px 8px; }
+    aside { display: none; }
+    .dock {
+      position: sticky;
+      bottom: 0;
+      padding: 12px 20px 16px;
+      background: var(--bg);
+      border-top: 1px solid var(--line-soft);
+      z-index: 10;
+    }
+  }
+
+  @media (max-width: 720px) {
+    .appbar-inner { padding: 0 16px; gap: 10px; height: 60px; }
+    .chip { display: none; }
+    .tagline { display: none; }
+    .examples { grid-template-columns: 1fr; }
+    .ev-grid { grid-template-columns: 1fr; }
+    .thread { padding: 20px 16px 8px; gap: 20px; }
+    .dock { padding: 10px 16px 14px; }
+    #input { padding: 16px 106px 16px 14px; font-size: 14px; }
+    .q-bubble { max-width: 88%; }
+    .hint { text-align: left; }
+    .empty h2 { font-size: 25px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+      scroll-behavior: auto !important;
+    }
+    .turn, .empty, .step { opacity: 1; transform: none; }
+  }
 </style>
 </head>
 <body>
 
-<header>
-  <div class="wordmark">Veri<span class="fin">Fin</span></div>
-  <div class="tagline">金融证据校验智能体 · LangGraph ReAct</div>
-  <div class="status">
-    <span class="dot" id="dot"></span>
-    <span id="status-text">连接中…</span>
+<a class="skip" href="#input">跳到输入框</a>
+
+<header class="appbar">
+  <div class="appbar-inner">
+    <div class="brand">
+      <span class="mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor"
+             stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 3.2l7 3v5.6c0 4.3-2.9 7.7-7 9.1-4.1-1.4-7-4.8-7-9.1V6.2l7-3z"/>
+          <path d="M8.9 12.1l2.2 2.1 4.1-4.3"/>
+        </svg>
+      </span>
+      <div class="brand-text">
+        <div class="wordmark">Veri<span class="wm-accent">Fin</span></div>
+        <div class="tagline">金融证据校验智能体 · 答案可追溯</div>
+      </div>
+    </div>
+    <div class="appbar-meta">
+      <span class="chip">v0.4.0 · ReAct</span>
+      <span class="status-pill" role="status" aria-live="polite">
+        <span class="dot" id="dot"></span>
+        <span id="status-text">连接中…</span>
+      </span>
+    </div>
   </div>
 </header>
 
 <main>
-  <section class="thread" id="thread" aria-live="polite" aria-label="对话区">
-    <div class="hero">
-      <h1>每个数字，都要<br><em>过证据这一关</em>。</h1>
-      <p>提问一个金融指标，智能体检索文档、四要素校验证据、冲突时重规划，推导型问题由程序执行器安全求值，全程轨迹可查。</p>
+  <section class="chat" aria-label="对话">
+    <div class="thread" id="thread" aria-live="polite" aria-label="对话记录">
+
+      <div class="empty" id="empty">
+        <div class="eyebrow">Evidence-first answers</div>
+        <h2>每个数字，<br>都要先过<em>证据这一关</em>。</h2>
+        <p class="lede">
+          提问一个金融指标：智能体检索文档、按四要素校验证据，冲突时自动重规划，
+          推导型问题交给程序执行器求值。答案、来源与执行轨迹，全部可查。
+        </p>
+
+        <div class="examples" role="group" aria-label="示例提问">
+          <button class="ex-btn" type="button" data-q="NovaTech 2023 年营收是多少？">
+            <span class="ex-tag">提取型 · Extraction</span>
+            <span class="ex-q">NovaTech 2023 年营收是多少？</span>
+            <span class="ex-go" aria-hidden="true">→</span>
+          </button>
+          <button class="ex-btn" type="button" data-q="NovaTech 营收 2023 到 2024 增长率是多少？">
+            <span class="ex-tag">推导型 · PoT 计算</span>
+            <span class="ex-q">NovaTech 营收 2023→2024 增长率？</span>
+            <span class="ex-go" aria-hidden="true">→</span>
+          </button>
+          <button class="ex-btn" type="button" data-q="NovaTech 2024 年营收是多少？只看年报口径">
+            <span class="ex-tag">冲突仲裁 · Replan</span>
+            <span class="ex-q">2024 营收：新闻稿与年报口径冲突</span>
+            <span class="ex-go" aria-hidden="true">→</span>
+          </button>
+          <button class="ex-btn" type="button" data-q="What about its gross margin?">
+            <span class="ex-tag">多轮指代 · Context</span>
+            <span class="ex-q">那毛利率呢？（先问任一题）</span>
+            <span class="ex-go" aria-hidden="true">→</span>
+          </button>
+        </div>
+
+        <ul class="capabilities">
+          <li>四要素校验</li>
+          <li>冲突自动重规划</li>
+          <li>PoT 程序化求值</li>
+          <li>执行轨迹可回溯</li>
+        </ul>
+      </div>
+
+    </div>
+
+    <div class="dock">
+      <div class="composer">
+        <label class="sr-only" for="input">输入你的金融问题</label>
+        <textarea
+          id="input"
+          rows="1"
+          aria-label="输入你的金融问题"
+          placeholder="输入金融问题，例如：NovaTech 2024 年净利润是多少？"></textarea>
+        <button id="send" type="button">
+          <span class="lbl">提问</span>
+          <svg class="ico" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"
+               fill="none" stroke="currentColor" stroke-width="1.7"
+               stroke-linecap="round" stroke-linejoin="round">
+            <path d="M2.5 8h10"/><path d="M8.6 4.2L12.8 8l-4.2 3.8"/>
+          </svg>
+          <span class="sp" aria-hidden="true"></span>
+        </button>
+      </div>
+      <p class="hint"><kbd>Enter</kbd> 发送 · <kbd>Shift</kbd>+<kbd>Enter</kbd> 换行 · 同一会话内记住你的口径偏好</p>
     </div>
   </section>
 
-  <aside>
-    <div class="example">
-      <h3>试试这些</h3>
-      <button class="ex-btn" data-q="NovaTech 2023 年营收是多少？">
-        <span class="tag">提取型</span>NovaTech 2023 年营收是多少？
-      </button>
-      <button class="ex-btn" data-q="NovaTech 营收 2023 到 2024 增长率是多少？">
-        <span class="tag">推导型 · PoT 计算</span>NovaTech 营收 2023→2024 增长率？
-      </button>
-      <button class="ex-btn" data-q="NovaTech 2024 年营收是多少？只看年报口径">
-        <span class="tag">冲突仲裁</span>2024 营收（新闻稿 vs 年报口径冲突）
-      </button>
-      <button class="ex-btn" data-q="What about its gross margin?">
-        <span class="tag">多轮指代</span>那毛利率呢？（需先问上面任一题）
-      </button>
-    </div>
-    <div class="session">
-      <h3>会话</h3>
-      <div class="row"><span>conversation</span><b id="conv-id">—</b></div>
-      <div class="row"><span>语料</span><b id="corpus">—</b></div>
-      <div class="row"><span>会话数</span><b id="sessions">—</b></div>
-      <div class="row"><span>最近裁决</span><b id="verdict">—</b></div>
-      <button class="new-conv" id="new-conv">＋ 新会话（清空偏好）</button>
-    </div>
+  <aside aria-label="会话上下文">
+    <section class="panel">
+      <h2 class="panel-title">会话上下文<span>Session</span></h2>
+      <dl class="kv">
+        <div class="kv-row"><dt>conversation</dt><dd class="mono" id="conv-id">—</dd></div>
+        <div class="kv-row"><dt>语料</dt><dd id="corpus">—</dd></div>
+        <div class="kv-row"><dt>会话数</dt><dd id="sessions">—</dd></div>
+        <div class="kv-row"><dt>最近裁决</dt><dd id="verdict">—</dd></div>
+      </dl>
+      <button class="new-conv" id="new-conv" type="button">新建会话 · 清空偏好</button>
+    </section>
+
+    <section class="panel">
+      <h2 class="panel-title">快捷提问<span>Examples</span></h2>
+      <div class="quick">
+        <button class="ex-btn sm" type="button" data-q="NovaTech 2023 年营收是多少？">
+          <span class="ex-tag">提取型</span>
+          <span class="ex-q">NovaTech 2023 年营收？</span>
+        </button>
+        <button class="ex-btn sm" type="button" data-q="NovaTech 营收 2023 到 2024 增长率是多少？">
+          <span class="ex-tag">推导型</span>
+          <span class="ex-q">营收 2023→2024 增长率？</span>
+        </button>
+        <button class="ex-btn sm" type="button" data-q="NovaTech 2024 年营收是多少？只看年报口径">
+          <span class="ex-tag">冲突仲裁</span>
+          <span class="ex-q">2024 营收，只看年报口径</span>
+        </button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2 class="panel-title">校验流水线<span>Pipeline</span></h2>
+      <ul class="caps">
+        <li><b>四要素校验</b>主体 / 口径 / 期间 / 数值一致性逐项比对。</li>
+        <li><b>冲突重规划</b>证据互相矛盾时自动更换检索路径。</li>
+        <li><b>程序化计算</b>推导题由 PoT 执行器求值，不经模型口算。</li>
+      </ul>
+    </section>
   </aside>
 </main>
 
-<div class="dock">
-  <div class="dock-inner">
-    <div class="composer">
-      <textarea id="input" rows="1" placeholder="输入金融问题，例如：NovaTech 2024 年净利润是多少？"></textarea>
-      <button id="send">提问 →</button>
-    </div>
-    <div class="hint">Enter 发送 · Shift+Enter 换行 · 同一会话内智能体记住你的偏好</div>
-  </div>
-</div>
-
 <script>
-const $ = (s) => document.querySelector(s);
-const thread = $("#thread");
-const input = $("#input");
-const send = $("#send");
-let conversationId = crypto.randomUUID ? crypto.randomUUID() : String(Date.now());
+"use strict";
 
+/* ------------------------------------------------------------------
+   基础工具
+   ------------------------------------------------------------------ */
+const $ = (sel) => document.querySelector(sel);
+const thread = $("#thread");
+const emptyState = $("#empty");
+const input = $("#input");
+const sendBtn = $("#send");
+
+let conversationId = crypto.randomUUID ? crypto.randomUUID() : String(Date.now());
+let busy = false;
+/* 请求代次：新建会话时自增，用于让在途请求的收尾逻辑失效 */
+let requestSeq = 0;
+
+/** 创建元素，可选的 class 与 HTML 内容。 */
 function el(tag, cls, html) {
   const node = document.createElement(tag);
   if (cls) node.className = cls;
   if (html !== undefined) node.innerHTML = html;
   return node;
 }
-const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
-const fmt = (v, u) => v == null ? "" : `${Number(v).toLocaleString()}${u ? " " + u : ""}`;
 
-/* ---- 健康检查 ---- */
+/** HTML 转义，所有来自后端或用户的文本都必须经过它。 */
+function esc(value) {
+  return String(value == null ? "" : value).replace(/[&<>"]/g, (c) => (
+    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]
+  ));
+}
+
+/** 通用数值格式化：千分位 + 单位。 */
+function fmt(value, unit) {
+  if (value == null) return "";
+  const num = Number(value);
+  const body = Number.isFinite(num) ? num.toLocaleString() : String(value);
+  return unit ? `${body} ${unit}` : body;
+}
+
+/** 计算面板中的数值：百分比统一保留一位小数。 */
+function metricNum(value, unit) {
+  if (value == null) return "";
+  const num = Number(value);
+  if (unit === "%" && Number.isFinite(num)) return `${num.toFixed(1)}%`;
+  return fmt(value, unit);
+}
+
+/** 首屏大数字格式化：百分比保留一位小数。 */
+function heroNum(value, unit) {
+  if (value == null) return "";
+  const num = Number(value);
+  if (!Number.isFinite(num)) return String(value);
+  if (unit === "%") return `${num.toFixed(1)}%`;
+  const body = num.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  return unit ? `${body} ${unit}` : body;
+}
+
+/* ------------------------------------------------------------------
+   健康检查
+   ------------------------------------------------------------------ */
 async function checkHealth() {
   try {
-    const r = await fetch("/health");
-    const b = await r.json();
+    const res = await fetch("/health");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const body = await res.json();
     $("#dot").className = "dot ok";
     $("#status-text").textContent = "服务在线";
-    $("#corpus").textContent = b.corpus?.source === "synthetic" ? "内置合成语料" : "预构建索引";
-    $("#sessions").textContent = b.sessions ?? "—";
+    $("#corpus").textContent = body.corpus?.source === "synthetic" ? "内置合成语料" : "预构建索引";
+    $("#sessions").textContent = body.sessions == null ? "—" : body.sessions;
   } catch {
     $("#dot").className = "dot err";
     $("#status-text").textContent = "服务离线";
   }
 }
-checkHealth(); setInterval(checkHealth, 15000);
+checkHealth();
+setInterval(checkHealth, 15000);
 $("#conv-id").textContent = conversationId.slice(0, 8);
 
-/* ---- 渲染 ---- */
+/* ------------------------------------------------------------------
+   轨迹节点名本地化
+   ------------------------------------------------------------------ */
+const NODE_LABELS = {
+  planner: ["规划", "PLANNER"],
+  retriever: ["检索", "RETRIEVER"],
+  verifier: ["校验", "VERIFIER"],
+  replanner: ["重规划", "REPLANNER"],
+  calculator: ["计算", "CALCULATOR"],
+  pot_executor: ["计算", "POT EXECUTOR"],
+  calc: ["计算", "CALC"],
+  synthesizer: ["综合", "SYNTHESIZER"],
+  responder: ["作答", "RESPONDER"],
+  answer: ["作答", "ANSWER"],
+};
+
+/** 把内部节点名映射为可读标签，并给出安全的 CSS 类后缀。 */
+function nodeMeta(raw) {
+  const key = String(raw == null ? "" : raw).toLowerCase();
+  const safe = key.replace(/[^a-z0-9_-]/g, "");
+  const label = NODE_LABELS[key];
+  if (label) return { cls: safe, zh: label[0], en: label[1] };
+  return { cls: safe || "step", zh: String(raw == null ? "步骤" : raw), en: String(raw == null ? "" : raw).toUpperCase() };
+}
+
+/* ------------------------------------------------------------------
+   结果渲染
+   ------------------------------------------------------------------ */
+
+/** 从后端结果中挑选用于突出展示的关键指标。 */
+function pickMetric(data) {
+  const calc = data.calculation || {};
+  const isGrowth = String(calc.kind || "").includes("growth");
+
+  if (calc.value != null) {
+    return {
+      value: heroNum(calc.value, calc.unit || (isGrowth ? "%" : "")),
+      label: isGrowth ? "增长率" : "计算结果",
+    };
+  }
+
+  const evidence = Array.isArray(data.evidence) ? data.evidence : [];
+  const accepted = evidence.filter((ev) => ev.status !== "excluded" && ev.value != null);
+  if (accepted.length) {
+    const first = accepted[0];
+    return {
+      value: heroNum(first.value, first.unit),
+      label: "已校验数值",
+    };
+  }
+  return null;
+}
+
+/** 依据后端 verdict 决定状态徽章的文案与配色。 */
+function verdictMeta(data, acceptedCount, hasCalc) {
+  const verdict = String(data.verdict || "").toUpperCase();
+  if (verdict.includes("REJECT") || verdict.includes("FAIL")) {
+    return { cls: "badge reject", text: "未通过 · Rejected" };
+  }
+  if (verdict.includes("PARTIAL")) {
+    return { cls: "badge accent", text: "部分验证 · Partial" };
+  }
+  if (verdict.includes("VERIF") || verdict.includes("PASS") || verdict.includes("OK")) {
+    return { cls: "badge ok", text: "已验证 · Verified" };
+  }
+  if (acceptedCount > 0 || hasCalc) {
+    return { cls: "badge ok", text: "已验证 · Verified" };
+  }
+  return { cls: "badge warn", text: "待确认 · Unverified" };
+}
+
+/** 渲染一次完整问答（用户气泡 + 结果卡片 + 轨迹 + 证据 + 计算）。 */
 function renderTurn(query, data) {
+  emptyState.hidden = true;
+
+  const calc = data.calculation || {};
+  const evidence = Array.isArray(data.evidence) ? data.evidence : [];
+  const accepted = evidence.filter((ev) => ev.status !== "excluded");
+  const rejected = evidence.length - accepted.length;
+  const path = Array.isArray(data.trajectory?.node_path) ? data.trajectory.node_path : [];
+  const badge = verdictMeta(data, accepted.length, calc.value != null);
+
   const turn = el("div", "turn");
 
-  // 用户问题
+  /* --- 用户问题 --- */
   const q = el("div", "q");
-  q.append(el("div", "who", "You"));
-  q.append(el("div", "bubble", esc(query)));
+  q.append(el("div", "q-bubble", esc(query)));
   turn.append(q);
 
-  // 智能体回答
-  const a = el("div", "a");
-  a.append(el("div", "who", "VeriFin Agent"));
-  a.append(el("div", "answer", esc(data.answer || "（无回答）")));
-  turn.append(a);
+  /* --- 答案卡片 --- */
+  const card = el("article", "answer-card");
 
-  // 计算面板
-  const calc = data.calculation || {};
+  const head = el("div", "ans-head");
+  head.append(el("span", "avatar", "V"));
+  head.append(el("span", "ans-name", "VeriFin Agent"));
+  head.append(el("span", badge.cls, badge.text));
+  head.append(el("span", "spacer"));
+  head.append(el("span", "ans-time", new Date().toLocaleTimeString("zh-CN", { hour12: false })));
+  card.append(head);
+
+  const metric = pickMetric(data);
+  if (metric) {
+    const box = el("div", "metric");
+    box.append(el("div", "metric-num", esc(metric.value)));
+    box.append(el("div", "metric-label", esc(metric.label)));
+    card.append(box);
+  }
+
+  card.append(el("div", "answer", esc(data.answer || "（本次未生成回答）")));
+
+  const footParts = [];
+  if (evidence.length) footParts.push(`证据 <b>${evidence.length}</b> 条`);
+  if (accepted.length) footParts.push(`采纳 <b>${accepted.length}</b>`);
+  if (rejected) footParts.push(`排除 <b>${rejected}</b>`);
+  if (path.length) footParts.push(`轨迹 <b>${path.length}</b> 步`);
+  if (footParts.length) {
+    card.append(el("div", "ans-foot", footParts.join(" · ")));
+  }
+
+  turn.append(card);
+
+  /* --- 执行轨迹 --- */
+  if (path.length) {
+    const block = el("section", "block");
+    const h = el("div", "block-head");
+    h.append(el("h3", "", "执行轨迹"));
+    h.append(el("span", "block-meta", `Trajectory · ${path.length} steps`));
+    block.append(h);
+
+    const stepper = el("ol", "stepper");
+    path.forEach((raw, i) => {
+      const meta = nodeMeta(raw);
+      const li = el("li", `step ${meta.cls}`);
+      li.style.animationDelay = `${i * 0.07}s`;
+      li.setAttribute("title", String(raw));
+      li.append(el("span", "pt"));
+      const tx = el("span", "tx");
+      tx.append(el("span", "lb", esc(meta.zh)));
+      if (meta.en) tx.append(el("span", "en", esc(meta.en)));
+      li.append(tx);
+      stepper.append(li);
+    });
+
+    block.append(stepper);
+    turn.append(block);
+  }
+
+  /* --- 证据网格 --- */
+  if (evidence.length) {
+    const block = el("section", "block");
+    const h = el("div", "block-head");
+    h.append(el("h3", "", "证据"));
+    h.append(el("span", "block-meta", `Evidence · ${accepted.length}/${evidence.length} accepted`));
+    block.append(h);
+
+    const grid = el("div", "ev-grid");
+    evidence.forEach((item, i) => {
+      const isAccepted = item.status !== "excluded";
+      const cardEl = el("div", `ev${isAccepted ? "" : " excluded"}`);
+
+      const evHead = el("div", "ev-head");
+      evHead.append(el("span", "ev-idx", `E${i + 1}`));
+      evHead.append(el("span", isAccepted ? "badge ok" : "badge reject", isAccepted ? "Pass" : "Reject"));
+      cardEl.append(evHead);
+
+      cardEl.append(el("div", "ev-text", esc(item.content || "（无摘要）")));
+
+      const foot = el("div", "ev-foot");
+      const source = [item.doc_name || item.doc_id || item.chunk_id || "", item.period || ""]
+        .filter(Boolean)
+        .join(" · ");
+      foot.append(el("span", "ev-src", esc(source || "—")));
+      foot.append(el("span", "ev-val", esc(fmt(item.value, item.unit))));
+      cardEl.append(foot);
+
+      grid.append(cardEl);
+    });
+
+    block.append(grid);
+    turn.append(block);
+  }
+
+  /* --- PoT 计算 --- */
   if (calc.expression || calc.error) {
-    const panel = el("div", "calc");
-    panel.append(el("div", "label", "PoT 程序执行 · " + (calc.kind || "calc")));
+    const block = el("section", "block");
+    const h = el("div", "block-head");
+    h.append(el("h3", "", "PoT 程序执行"));
+    h.append(el("span", "block-meta", esc(calc.kind || "calc")));
+    block.append(h);
+
     if (calc.expression) {
-      panel.append(el("div", "expr", `<code>${esc(calc.expression)}</code>`));
-      const scales = el("div", "scales");
-      const isGrowth = (calc.kind || "").includes("growth");
+      const pre = el("pre", "code");
+      pre.append(el("code", "", esc(calc.expression)));
+      block.append(pre);
+
+      const isGrowth = String(calc.kind || "").includes("growth");
       const items = [
         [isGrowth ? "增长率" : "结果", calc.value, calc.unit || "%"],
         [isGrowth ? "比率" : "分数", calc.fraction, ""],
         [isGrowth ? "差值" : "变化量", calc.difference, calc.difference_unit || ""],
       ];
+      const metrics = el("div", "metrics");
       items.forEach(([k, v, u]) => {
         if (v == null) return;
-        const s = el("div", "scale");
-        s.append(el("div", "k", k));
-        s.append(el("div", "v", fmt(v, u)));
-        scales.append(s);
+        const cell = el("div", "metric-cell");
+        cell.append(el("div", "k", k));
+        cell.append(el("div", "v", esc(metricNum(v, u))));
+        metrics.append(cell);
       });
-      panel.append(scales);
-      // 口径候选（alternates）：主结果之外的其他证据口径，透明披露
-      const alts = calc.alternates || [];
-      if (alts.length > 1) {
-        const altBox = el("div", "alts");
-        altBox.append(el("div", "alt-label", "口径候选"));
-        alts.slice(1).forEach(a => {
-          const row = el("div", "alt-row");
-          const pct = a.fraction != null ? (a.fraction * 100).toFixed(1) + "%" : "";
-          row.append(el("span", "alt-val", `${fmt(a.target?.value)} ${esc(a.target?.period || "")}`));
-          row.append(el("span", "alt-src", `${pct}${a.target?.chunk_id ? " · " + esc(a.target.chunk_id) : ""}`));
-          altBox.append(row);
-        });
-        panel.append(altBox);
-      }
+      if (metrics.childNodes.length) block.append(metrics);
     } else if (calc.error) {
-      panel.append(el("div", "expr", `<span style="color:var(--crimson)">${esc(calc.error)}</span>`));
+      const pre = el("pre", "code err");
+      pre.append(el("code", "", `计算未完成：${esc(calc.error)}`));
+      block.append(pre);
     }
-    turn.append(panel);
+
+    // 口径候选：主结果之外的其他证据口径，透明披露
+    const alts = Array.isArray(calc.alternates) ? calc.alternates : [];
+    if (alts.length > 1) {
+      const altBox = el("div", "alts");
+      altBox.append(el("div", "alt-label", "口径候选"));
+      alts.slice(1).forEach((alt) => {
+        const row = el("div", "alt-row");
+        const pct = alt.fraction != null ? `${(alt.fraction * 100).toFixed(1)}%` : "";
+        row.append(el("span", "alt-val", esc(`${fmt(alt.target?.value)} ${alt.target?.period || ""}`.trim())));
+        row.append(el("span", "alt-src", esc(`${pct}${alt.target?.chunk_id ? " · " + alt.target.chunk_id : ""}`)));
+        altBox.append(row);
+      });
+      block.append(altBox);
+    }
+
+    turn.append(block);
   }
 
-  // 轨迹步进器
-  const path = data.trajectory?.node_path || [];
-  if (path.length) {
-    const traj = el("div", "traj");
-    path.forEach((node, i) => {
-      const step = el("div", "step");
-      step.style.animationDelay = `${i * 0.12}s`;
-      step.append(el("span", `node ${node}`, esc(node)));
-      traj.append(step);
-      if (i < path.length - 1) {
-        const arrow = el("span", "arrow", "→");
-        arrow.style.animationDelay = `${i * 0.12 + 0.06}s`;
-        arrow.className = "arrow step";
-        traj.append(arrow);
-      }
-    });
-    turn.append(traj);
-  }
-
-  // 证据卡
-  const evidence = data.evidence || [];
-  if (evidence.length) {
-    const box = el("div", "evidence");
-    evidence.forEach((ev, i) => {
-      const card = el("div", "ev");
-      card.style.animation = `rise 0.4s ease ${0.3 + i * 0.08}s both`;
-      const accepted = ev.status !== "excluded";
-      const left = el("div");
-      left.append(el("div", accepted ? "badge" : "badge excluded", accepted ? "✓ 已采纳" : "✕ 未采纳"));
-      left.append(el("div", "idx", `E${i + 1}`));
-      const mid = el("div");
-      mid.append(el("div", "content", esc(ev.content || "")));
-      mid.append(el("div", "meta", `${esc(ev.doc_name || ev.doc_id || ev.chunk_id || "")}${ev.period ? " · " + esc(ev.period) : ""}`));
-      const right = el("div", "val", fmt(ev.value, ev.unit));
-      if (!accepted) card.classList.add("excluded");
-      card.append(left, mid, right);
-      box.append(card);
-    });
-    turn.append(box);
-  }
-
-  // 偏好记忆
+  /* --- 偏好记忆 --- */
   const prefs = data.dialog_state || {};
-  const prefKeys = Object.keys(prefs).filter(k => k.endsWith("_preference") && prefs[k]);
+  const prefKeys = Object.keys(prefs).filter((k) => k.endsWith("_preference") && prefs[k]);
   if (prefKeys.length) {
     const chips = el("div", "prefs");
-    prefKeys.forEach(k => {
+    chips.append(el("span", "prefs-label", "对话偏好"));
+    prefKeys.forEach((k) => {
       chips.append(el("span", "pref", `${esc(k.replace("_preference", ""))}: <b>${esc(prefs[k])}</b>`));
     });
     turn.append(chips);
   }
 
-  const v = $("#verdict");
-  if (v && data.verdict) v.textContent = data.verdict;
-  thread.append(turn);
-  turn.scrollIntoView({ behavior: "smooth", block: "end" });
-}
+  const verdictEl = $("#verdict");
+  if (verdictEl && data.verdict) verdictEl.textContent = data.verdict;
 
-function renderThinking(query) {
-  const turn = el("div", "turn");
-  const q = el("div", "q");
-  q.append(el("div", "who", "You"));
-  q.append(el("div", "bubble", esc(query)));
-  turn.append(q);
-  const t = el("div", "thinking");
-  t.innerHTML = `<span class="bar"><i></i><i></i><i></i><i></i></span> 智能体正在检索 · 校验 · 推理…`;
-  turn.append(t);
   thread.append(turn);
   turn.scrollIntoView({ behavior: "smooth", block: "end" });
   return turn;
 }
 
-/* ---- 交互 ---- */
+/** 渲染「思考中」占位，返回可移除的节点。 */
+function renderThinking(query) {
+  emptyState.hidden = true;
+
+  const turn = el("div", "turn");
+  const q = el("div", "q");
+  q.append(el("div", "q-bubble", esc(query)));
+  turn.append(q);
+
+  const typing = el("div", "thinking");
+  typing.setAttribute("role", "status");
+  typing.innerHTML = '<span class="bar" aria-hidden="true"><i></i><i></i><i></i><i></i></span>'
+    + '<span>正在检索证据 · 校验四要素 · 推理…</span>';
+  turn.append(typing);
+
+  thread.append(turn);
+  turn.scrollIntoView({ behavior: "smooth", block: "end" });
+  return turn;
+}
+
+/* ------------------------------------------------------------------
+   交互
+   ------------------------------------------------------------------ */
 async function ask(query) {
   const pending = renderThinking(query);
-  send.disabled = true;
+  const convAtSend = conversationId;
+  const seq = ++requestSeq;
+  sendBtn.disabled = true;
+  sendBtn.classList.add("is-loading");
+
   const abort = new AbortController();
   const timer = setTimeout(() => abort.abort(), 90000);
+
   try {
-    const r = await fetch("/ask", {
+    const res = await fetch("/ask", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ query, conversation_id: conversationId }),
       signal: abort.signal,
     });
     clearTimeout(timer);
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const data = await r.json();
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
     pending.remove();
+    // 会话已被重置时丢弃过期结果，避免脏数据渲染到新会话
+    if (convAtSend !== conversationId) return;
     renderTurn(query, data);
-  } catch (e) {
+  } catch (err) {
     clearTimeout(timer);
     pending.remove();
+
+    // 会话已重置或请求已作废时，不再把过期错误渲染进新会话
+    if (seq !== requestSeq || convAtSend !== conversationId) return;
+
     const turn = el("div", "turn");
-    const msg = e.name === "AbortError"
-      ? "请求超时（90 秒），请尝试更明确的问题表述后重试。"
-      : `请求失败：${esc(e.message)} — 请确认 FastAPI 服务已启动（uvicorn 或 python -m verifin.api.app）`;
-    turn.append(el("div", "error", msg));
+    const box = el("div", "error");
+    box.setAttribute("role", "alert");
+    box.append(el("div", "err-title", err.name === "AbortError" ? "请求超时" : "请求失败"));
+    box.append(el("div", "err-body", err.name === "AbortError"
+      ? "后端 90 秒内未返回结果。请尝试更明确的问题表述后重试。"
+      : `${esc(err.message)} — 请确认服务已启动（uvicorn 或 python -m verifin.api.app）。`));
+    turn.append(box);
     thread.append(turn);
+    turn.scrollIntoView({ behavior: "smooth", block: "end" });
   } finally {
-    send.disabled = false;
+    // 已被「新建会话」作废的请求不再改写发送区状态，避免覆盖新请求的 loading 态
+    if (seq !== requestSeq) return;
+    sendBtn.disabled = false;
+    sendBtn.classList.remove("is-loading");
+    busy = false;
     input.focus();
   }
 }
 
-send.addEventListener("click", () => {
-  const q = input.value.trim();
-  if (q) { input.value = ""; input.style.height = "auto"; ask(q); }
-});
+/* 同一时刻只允许一个进行中的请求（与禁用按钮的行为保持一致） */
+function submitInput() {
+  if (busy) return;
+  const query = input.value.trim();
+  if (!query) return;
+  input.value = "";
+  input.style.height = "auto";
+  busy = true;
+  ask(query);
+}
+
+sendBtn.addEventListener("click", submitInput);
+
 input.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey) {
     e.preventDefault();
-    send.click();
+    submitInput();
   }
 });
+
 input.addEventListener("input", () => {
   input.style.height = "auto";
-  input.style.height = Math.min(input.scrollHeight, 140) + "px";
+  input.style.height = `${Math.min(input.scrollHeight, 168)}px`;
 });
-document.querySelectorAll(".ex-btn").forEach(btn => {
+
+document.querySelectorAll(".ex-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
-    input.value = btn.dataset.q;
-    send.click();
+    input.value = btn.dataset.q || "";
+    submitInput();
   });
 });
+
 $("#new-conv").addEventListener("click", () => {
   conversationId = crypto.randomUUID ? crypto.randomUUID() : String(Date.now());
   $("#conv-id").textContent = conversationId.slice(0, 8);
-  document.querySelectorAll(".turn").forEach(t => t.remove());
+
+  // 作废在途请求的前端状态（不中断后端请求）：恢复发送区可交互，避免新会话里首次发送被吞掉
+  requestSeq += 1;
+  busy = false;
+  sendBtn.disabled = false;
+  sendBtn.classList.remove("is-loading");
+
+  document.querySelectorAll(".turn").forEach((node) => node.remove());
+  const verdictEl = $("#verdict");
+  if (verdictEl) verdictEl.textContent = "—";
+  emptyState.hidden = false;
   input.focus();
 });
 </script>
