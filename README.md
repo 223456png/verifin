@@ -6,13 +6,13 @@
 [![license](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
 [![MCP](https://img.shields.io/badge/MCP-server-8A2BE2)](src/verifin/mcp/server.py)
 
+![VeriFin Web Demo：一次提问的完整轨迹](docs/demo.png)
+
 金融问答的 RAG 有个老问题：检索到一段“看起来相关”的文字，就直接拿去当证据。可实际上年份可能对不上、指标可能不是同一个、口径可能一个是 GAAP、一个是 adjusted。模型不操心这些，照样算，最后给你一个看着挺像回事、其实站不住的答案。
 
 VeriFin 想把“证据到底能不能用”这一步补上。每条证据都要过实体、时间、指标、口径四项检查，过不了就诊断原因、改写查询再试；涉及数字的地方不让模型心算，交给受限的程序执行器。整个循环用 LangGraph 编排，核心能力也包成了 MCP 服务，别的客户端可以直接调。
 
 一句话：检索只是入口，我要的是一个能溯源、经得起核对的 Claim–Evidence 绑定。
-
-![VeriFin Web Demo：一次提问的完整轨迹](docs/demo.png?v=2)
 
 ## 为什么做这个
 
